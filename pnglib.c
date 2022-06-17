@@ -89,9 +89,7 @@ void PNG_Get_Pixelpp(pixel_pp* pp){
     }
 
 }
-void PNG_Clean(){
 
-}
 
 uint8_t* ScanLine;
 uint8_t* previous_ScanLine;
@@ -360,24 +358,24 @@ void Undo_Filters(){
 
 //######## pngreading Functions #########//{
 
-long long int get_file_size(char *pathname){
+long long int PNG_get_size(char *pathname){
     struct stat file_stat;
     stat(pathname,&file_stat);
     return file_stat.st_size;
 }
 
-int File_Exists(char* file_name){
+int PNG_file_exists(char* file_name){
   if( access( file_name, F_OK ) != -1)return 1;
   else return 0;  
     //perror("file is not found");
 }
-int is_little_endian(){
+int isLittle_Endian(){
     int num = 1;
     if (*(char *)&num == 1)return 1;//printf("Little-Endian\n");
     else return 0;//printf("Big-Endian\n");
 }
 
-void convert_big_to_little_endian(unsigned int* n){
+void big_to_little_endian(unsigned int* n){
 *n = (*n >> 24) | ((*n >> 8) & 0x0000ff00) | ((*n << 8) & 0x00ff0000) | (*n << 24);
 }
 
@@ -418,7 +416,7 @@ unsigned int read_chunk_length(FILE* fp){
     if(Little_Endian){
         fseek(fp,4,SEEK_CUR);
         free(temp);
-        convert_big_to_little_endian(&length);
+        big_to_little_endian(&length);
         return length;
     }
     else{
@@ -520,7 +518,7 @@ void get_PLTE(FILE* fp){
                 fseek(fp,-8,SEEK_CUR); // go back to the lengths
                 fread(b,1,4,fp); // read the length
                 plte_chunk.length = *(unsigned int*)(b);
-                if(Little_Endian == 1)convert_big_to_little_endian(&plte_chunk.length); // get the chunk length
+                if(Little_Endian == 1)big_to_little_endian(&plte_chunk.length); // get the chunk length
                 ////////printf("plte chunk len: %u ",plte_chunk.length);
                 fseek(fp,4,SEEK_CUR);      
                 break;
@@ -537,7 +535,7 @@ void get_PLTE(FILE* fp){
     }
     fread(b,1,4,fp);
     plte_chunk.CRC = *(unsigned int*)(b);
-    if(Little_Endian == 1)convert_big_to_little_endian(&plte_chunk.CRC);
+    if(Little_Endian == 1)big_to_little_endian(&plte_chunk.CRC);
     free(b);
 }
 
@@ -674,12 +672,12 @@ int decode_IHDR(FILE* fp){
         unsigned char* b = malloc(4 * sizeof(unsigned char)); // assign 4 bytes
         fread(b,1,4,fp);
         ihdr_chunk.width = *(unsigned int*)(b);
-        Little_Endian & 1 ?convert_big_to_little_endian(&ihdr_chunk.width):0;
+        Little_Endian & 1 ?big_to_little_endian(&ihdr_chunk.width):0;
         printf("\npng widht: %u ", ihdr_chunk.width);
 
         fread(b,1,4,fp);
         ihdr_chunk.height = *(unsigned int*)(b);
-        Little_Endian & 1 ?convert_big_to_little_endian(&ihdr_chunk.height):0;
+        Little_Endian & 1 ?big_to_little_endian(&ihdr_chunk.height):0;
         printf("\npng height: %u ", ihdr_chunk.height);       // //////printf(" %d",foo);
 
         fread(b,1,1,fp);
@@ -726,7 +724,7 @@ while(!feof(fp) && ftell(fp) < limit){
             fseek(fp,-8,SEEK_CUR); // go back to the lengths
             fread(temp,1,4,fp); // read the length
             trns_chunk.length = *(unsigned int*)(temp);
-            if(Little_Endian == 1)convert_big_to_little_endian(&trns_chunk.length); // get the chunk length
+            if(Little_Endian == 1)big_to_little_endian(&trns_chunk.length); // get the chunk length
             ////printf("trns chunk len: %u ",trns_chunk.length);
             fseek(fp,4,SEEK_CUR);      
             break;
@@ -829,11 +827,11 @@ void Convert_IDAT_BUF_TO_2D_PIX(){
 
 int PNG_Init(char* FileName,int Option){
     FILE* fp;
-    if(File_Exists(FileName)){
-        PNG_file_size = get_file_size(FileName);
+    if(PNG_file_exists(FileName)){
+        PNG_file_size = PNG_get_size(FileName);
         fp = fopen(FileName,"rb");
         if(is_png(fp)){
-            Little_Endian = is_little_endian();
+            Little_Endian = isLittle_Endian();
             decode_IHDR(fp); 
 
             if(ihdr_chunk.colour_type == 3){ // 3 means that it is indexed
@@ -987,6 +985,60 @@ for(int i= 0; i < size; i++ ){
 }
 }
 
+void make2d_Idat(uint8_t*** out,uint8_t** in,int w, int h){
+    (*out) = (uint8_t**)malloc(h*sizeof(uint8_t*));
+    int in_i = 0; 
+    for(int i=0;i < h; i++ ){
+        (*out)[i] = malloc(w*4);
+        for(int j = 0 ; j < w*4 ; j++){
+            (*out)[i][j] = (*in)[in_i];
+            in_i++;
+        }
+    }
+}
+
+void mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale){
+    pixel_pp pp;
+    pixel_pp pp_sc;//scaled
+   // make2d_Idat(&p_vals2d,buf,w,h);
+    PNG_Get_Pixelpp(&pp);
+    w/=scale;
+    h/=scale;
+
+    (*scaled_out )= malloc(w*h*4);
+    (pp_sc)= (struct pixel**)malloc(h*sizeof(struct pixel*));
+    int idat_i=3;
+    for(int i= 0; i < h; i++){
+        (pp_sc)[i] = (struct pixel*)malloc(w * sizeof(struct pixel) );
+        for(int j = 0; j < w  ; j++){
+        pp_sc[i][j].r = 
+        (pp[i*scale][j*scale].r + pp[i*scale][j*scale+1].r 
+        + pp[i*scale+1][j*scale].r + pp[i*scale+1][j*scale+1].r)/4;
+          
+        pp_sc[i][j].g = 
+        (pp[i*scale][j*scale].g + pp[i*scale][j*scale+1].g 
+        + pp[i*scale+1][j*scale].g + pp[i*scale+1][j*scale+1].g)/4;
+          
+         pp_sc[i][j].b = 
+        (pp[i*scale][j*scale].b + pp[i*scale][j*scale+1].b 
+        + pp[i*scale+1][j*scale].b + pp[i*scale+1][j*scale+1].b)/4;
+          
+        pp_sc[i][j].A = 
+        (pp[i*scale][j*scale].A + pp[i*scale][j*scale+1].A 
+        + pp[i*scale+1][j*scale].A + pp[i*scale+1][j*scale+1].A)/4;
+            
+        (*scaled_out)[idat_i-3] = pp_sc[i][j].r;
+        (*scaled_out)[idat_i-2] = pp_sc[i][j].g;
+        (*scaled_out)[idat_i-1] = pp_sc[i][j].b;
+        (*scaled_out)[idat_i] = pp_sc[i][j].A;
+        idat_i+=4;
+        }
+        free(pp_sc[i]);
+    }
+    free(pp_sc);
+    PNG_Free_2dpixel((h*scale),&pp);
+}
+
 unsigned long Png_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,int blocksize, FILE *fp)
 {
     unsigned char out[blocksize];
@@ -1010,8 +1062,6 @@ unsigned long Png_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
        // printf("have: %u",have);
         write_chnk_len_IDAT(have,fp);
         bytes_written += fwrite(out, sizeof(char), have, fp);
-
-
         png_crc_buf = malloc(have+4);
         for(int i= 0; i < have; i++ ){
           png_crc_buf[i+4] = out[i]; 
@@ -1020,6 +1070,7 @@ unsigned long Png_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
           png_crc_buf[1] = IDAT_ID[1];
           png_crc_buf[2] = IDAT_ID[2];
           png_crc_buf[3] = IDAT_ID[3];
+
         unsigned long crc_val = crc(png_crc_buf,have+4);
         crc_val = __builtin_bswap32(crc_val);
         fwrite(&crc_val,1,4,fp);
@@ -1031,7 +1082,7 @@ unsigned long Png_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
     return bytes_written;
 }
 
-void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int bytepp, int option)
+void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int bytepp)
 {
    // Exec_time_Start();
     bytespp = bytepp;

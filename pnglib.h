@@ -61,8 +61,10 @@ void PNG_Exit();//Deallocates ALL internal buffers use this if you want to read 
 void PNG_Get_Dim(int* w, int* h);
 void PNG_Get_Pixelpp(pixel_pp* pp); // gets 2d pixel struct array for really easy access to all values
 void PNG_Get_Pixelvals(uint8_t** plist); // saves the IDAT buffer (the raw rgba vals) into a 1d uint8_t* (unsigned char*) buffer
+void make2d_Idat(uint8_t*** out,uint8_t** in,int w, int h);
 void PNG_Free_2dpixel(int height , pixel_pp* pp);
-void PngEncode(uint8_t *IDAT_input, char *PngName, int width, int height, int bytepp);
+void mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale);
+void Png_Encode(uint8_t *IDAT_input, char *PngName, int width, int height, int bytepp);
 //######## Functions #########//}
 
 
