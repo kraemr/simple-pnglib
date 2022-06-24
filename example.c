@@ -29,10 +29,13 @@ int main(int argc, char* argv[]){
      //printf("%u",pxpp[2000][1000].b);
      //PNG_Free_2dpixel(h,&pxpp);
     PNG_Get_Pixelvals(&pp);
+    /*for(int i = 40000; i < w*98; i++){
+        printf(" %d ",pp[i]);
+    }*/
      //PngEncode();
-    uint8_t* tt;
-    mipmap(&pp,&tt,h,w,scale);
-    Png_Encode(tt,new_fname,w/scale,h/scale,4);
+  //  uint8_t* tt;
+//    mipmap(&pp,&tt,h,w,scale);
+    Png_Encode(pp,new_fname,w/scale,h/scale,4);
     PNG_Exit();
 
 }

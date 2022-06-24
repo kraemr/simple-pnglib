@@ -369,7 +369,8 @@ int isLittle_Endian(){
     else return 0;//printf("Big-Endian\n");
 }
 
-void big_to_little_endian(unsigned int* n){
+
+void PNG_change_endian(unsigned int* n){
 *n = (*n >> 24) | ((*n >> 8) & 0x0000ff00) | ((*n << 8) & 0x00ff0000) | (*n << 24);
 }
 
@@ -410,7 +411,7 @@ unsigned int read_chunk_length(FILE* fp){
     if(Little_Endian){
         fseek(fp,4,SEEK_CUR);
         free(temp);
-        big_to_little_endian(&length);
+        PNG_change_endian(&length);
         return length;
     }
     else{
@@ -512,7 +513,7 @@ void get_PLTE(FILE* fp){
                 fseek(fp,-8,SEEK_CUR); // go back to the lengths
                 fread(b,1,4,fp); // read the length
                 plte_chunk.length = *(unsigned int*)(b);
-                if(Little_Endian == 1)big_to_little_endian(&plte_chunk.length); // get the chunk length
+                if(Little_Endian == 1)PNG_change_endian(&plte_chunk.length); // get the chunk length
                 ////////printf("plte chunk len: %u ",plte_chunk.length);
                 fseek(fp,4,SEEK_CUR);      
                 break;
@@ -529,7 +530,7 @@ void get_PLTE(FILE* fp){
     }
     fread(b,1,4,fp);
     plte_chunk.CRC = *(unsigned int*)(b);
-    if(Little_Endian == 1)big_to_little_endian(&plte_chunk.CRC);
+    if(Little_Endian == 1)PNG_change_endian(&plte_chunk.CRC);
     free(b);
 }
 
@@ -570,11 +571,13 @@ void Print_trns(){
 }
 
 struct pixel* plte_pixels;
+
 void Print_PLTE_Pixel(){
     for(int i = 0; i< plte_chunk.length / 3 ; i++){
       //  ////printf("\n %u %u %u",plte_pixels[i].r,plte_pixels[i].g,plte_pixels[i].b);
     }
 }
+
 void Convert_PLTE_To_Pixel(){
     plte_pixels =(struct pixel*)malloc(plte_chunk.length/3 * sizeof(struct pixel));
     int plte_i = 0;
@@ -600,7 +603,6 @@ void Make_IDATBUF_Plte( ){
     uint32_t IDAT_i= 0;
     uint32_t IDAT2_i= 0;
     uint8_t plte_i = 0;
-
     for(int i =0 ; i < ihdr_chunk.height; i++){
         for(int j = 0; j < ihdr_chunk.width;j++){
             j == 0 ? IDAT_i++: 0 ;
@@ -618,7 +620,6 @@ void Make_IDATBUF_Plte( ){
         }   
     }
    printf(" IDATBUF len: %u h: %u w: %u bpp: %u ",IDAT_i,ihdr_chunk.height,ihdr_chunk.width,bytes_pp);
-
 }
 
 //this prepares the pixel struct accessed by the end user
@@ -666,12 +667,12 @@ int decode_IHDR(FILE* fp){
         unsigned char* b = malloc(4 * sizeof(unsigned char)); // assign 4 bytes
         fread(b,1,4,fp);
         ihdr_chunk.width = *(unsigned int*)(b);
-        Little_Endian & 1 ?big_to_little_endian(&ihdr_chunk.width):0;
+        Little_Endian & 1 ?PNG_change_endian(&ihdr_chunk.width):0;
         printf("\npng widht: %u ", ihdr_chunk.width);
 
         fread(b,1,4,fp);
         ihdr_chunk.height = *(unsigned int*)(b);
-        Little_Endian & 1 ?big_to_little_endian(&ihdr_chunk.height):0;
+        Little_Endian & 1 ?PNG_change_endian(&ihdr_chunk.height):0;
         printf("\npng height: %u ", ihdr_chunk.height);       // //////printf(" %d",foo);
 
         fread(b,1,1,fp);
@@ -718,7 +719,7 @@ while(!feof(fp) && ftell(fp) < limit){
             fseek(fp,-8,SEEK_CUR); // go back to the lengths
             fread(temp,1,4,fp); // read the length
             trns_chunk.length = *(unsigned int*)(temp);
-            if(Little_Endian == 1)big_to_little_endian(&trns_chunk.length); // get the chunk length
+            if(Little_Endian == 1)PNG_change_endian(&trns_chunk.length); // get the chunk length
             ////printf("trns chunk len: %u ",trns_chunk.length);
             fseek(fp,4,SEEK_CUR);      
             break;
@@ -736,7 +737,6 @@ trns_chunk.Chunk_Data = (uint8_t*)malloc(trns_chunk.length * sizeof(uint8_t));
 
 
 int is_png(FILE* fp){
-    
     unsigned char* b = malloc(8);
     fread(b,1,8,fp);
     for(int i=0;i<8;i++){
@@ -804,7 +804,7 @@ void Convert_IDAT_BUF_TO_2D_PIX(){
                     pixel_rows[row][col].r = IDAT_Buffer[j-bytes_pp];
                     pixel_rows[row][col].g = IDAT_Buffer[j-bytes_pp+1];
                     pixel_rows[row][col].b = IDAT_Buffer[j-bytes_pp+2];
-		    pixel_rows[row][col].A = IDAT_Buffer[j-bytes_pp+3];
+		            pixel_rows[row][col].A = IDAT_Buffer[j-bytes_pp+3];
                     ;break;
                     default: 
                     ;break;
@@ -884,7 +884,6 @@ void PNG_Get_Pixelvals(uint8_t** plist){
     for(int i = 0 ; i < size; i++){
         (*plist)[i] = IDAT_Buffer[i];
     }
-    //memcpy(*plist,IDAT_Buffer,size);
 }
 //######## pngreading Functions #########//}
 
@@ -928,27 +927,26 @@ uint8_t* scannd_scanline;
       is the 1's complement of the final running CRC (see the
       crc() routine below). */
    
-   unsigned long update_crc(unsigned long crc, unsigned char *buf,
+   unsigned long PNG_update_crc(unsigned long crc, unsigned char *buf,
                             int len)
    {
      unsigned long c = crc;
      int n;
-   
      if (!crc_table_computed)
-       make_crc_table();
-     for (n = 0; n < len; n++) {
-       c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
-     }
-     return c;
-   }
+        make_crc_table();
+            for (n = 0; n < len; n++) {
+                c = crc_table[(c ^ buf[n]) & 0xff] ^ (c >> 8);
+            }
+    return c;
+    }
    
-   /* Return the CRC of the bytes buf[0..len-1]. */
-   unsigned long crc(unsigned char *buf, int len)
-   {
-     return update_crc(0xffffffffL, buf, len) ^ 0xffffffffL;
-   }
+    /* Return the CRC of the bytes buf[0..len-1]. */
+    unsigned long crc(unsigned char *buf, int len)
+    {
+     return PNG_update_crc(0xffffffffL, buf, len) ^ 0xffffffffL;
+    }
 
-uint8_t* png_crc_buf;
+   uint8_t* png_crc_buf;
 //Writes the Chunk length and IDAT identifier
 void write_chnk_len_IDAT(unsigned int chnk_len, FILE* fp){
     unsigned int Chunk_length = chnk_len;
@@ -957,29 +955,7 @@ void write_chnk_len_IDAT(unsigned int chnk_len, FILE* fp){
     fwrite(IDAT_ID, 1, 4, fp);
 }
 
-void resize_image(int scale,uint8_t* input,struct IHDR_CHUNK* ihdr,int downscale){
-  	int size = (ihdr->width*bytespp) * ihdr->height ;
-  	uint8_t* scaled_idat = malloc(size);
-  	ihdr->width = ihdr->width/scale;
-  	ihdr->height = ihdr->height/scale;
-	int scaled_idat_i=bytespp;
-	int unscaled_idat_i=(bytespp)*scale;
-	for(int i=0; i < ihdr->height; i++){
-		for(int j=bytespp ; j < ihdr->width*bytespp; j+=bytespp){
-			scaled_idat[scaled_idat_i-3] = input[unscaled_idat_i-3];
-			scaled_idat[scaled_idat_i-2] = input[unscaled_idat_i-2];
-			scaled_idat[scaled_idat_i-1] = input[unscaled_idat_i-1];
-			scaled_idat[scaled_idat_i] = input[unscaled_idat_i];
-		scaled_idat_i += bytespp;
-		unscaled_idat_i +=bytespp*scale;
-		}
-	}
-for(int i= 0; i < size; i++ ){
-  input[i] = scaled_idat[i];
-}
-}
-
-void make2d_Idat(uint8_t*** out,uint8_t** in,int w, int h){
+void PNG_make2d_Idat(uint8_t*** out,uint8_t** in,int w, int h){
     (*out) = (uint8_t**)malloc(h*sizeof(uint8_t*));
     int in_i = 0; 
     for(int i=0;i < h; i++ ){
@@ -991,10 +967,10 @@ void make2d_Idat(uint8_t*** out,uint8_t** in,int w, int h){
     }
 }
 
-void mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale){
+void PNG_mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale){
     pixel_pp pp;
     pixel_pp pp_sc;//scaled 2d pixel
-   // make2d_Idat(&p_vals2d,buf,w,h);
+   // PNG_make2d_Idat(&p_vals2d,buf,w,h);
     PNG_Get_Pixelpp(&pp);
     w/=scale;
     h/=scale;
@@ -1037,7 +1013,7 @@ int ApplyFilterScan(){
 
 }
 
-unsigned long Png_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,int blocksize, FILE *fp)
+unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,int blocksize, FILE *fp)
 {
     unsigned char out[blocksize];
     int e = 0;
@@ -1081,16 +1057,20 @@ unsigned long Png_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
 }
 
 
-int calculate_filterval(int ScanLineLen,int bytepp){
+
+
+
+int PNG_calc_filterval(int ScanLineLen,int bytepp){
     ScanLine[0] = 0;
     int filter=UP;
+    /*
     uint8_t* curblock = malloc(bytepp);
     uint8_t* lastblock = malloc(bytepp);
     lastblock[0] = 0;
     lastblock[1] = lastblock[0];
     lastblock[2] = lastblock[0];
     lastblock[3] = lastblock[0];
-    
+    */
     //check if the ScanLine is the same as the One Above
     for(int i = 1; i < ScanLineLen; i++){
         if(ScanLine[i] != previous_ScanLine[i]){
@@ -1106,7 +1086,7 @@ int calculate_filterval(int ScanLineLen,int bytepp){
     }
     if(filter == -2){
         //NOFILTER
-        printf("NO Filter");
+       // printf("NO Filter");
         return NOFILTER;
     }
 }
@@ -1143,6 +1123,7 @@ int applyFilter(uint8_t* fil_Scan,int len){
         break;
     }
 }
+
 // this copies the Scanline buffer to the filtered buffer, which gets written to file
 int copyScantoBuf(uint8_t* fil_buf,uint8_t* fil_Scan,int len,int buf_i){
     for(int i = 0; i < len; i++){
@@ -1159,14 +1140,16 @@ void makefilteredbuffer(uint8_t* in, uint8_t* temp, int bufsize, int len){
     previous_ScanLine = malloc(len);
     int temp_i=0;
     int in_i=0;
-    uint8_t first;
+    uint8_t first = 0;
     int i = 0;
-    
-    
+
+    //we need this because in some cases there are average filters or up filters even if it is the first scanline
+    //in cases like these you are suppossed to assume the values are all 0
+    for(int j = 0; j < len; j++){
+        previous_ScanLine[j] = 0; 
+    }    
+
     while(i < bufsize ){
-
-    
-
         if(!first){
             for(int j = 0; j < len; j++){
                 previous_ScanLine[j] = ScanLine[j];
@@ -1176,8 +1159,9 @@ void makefilteredbuffer(uint8_t* in, uint8_t* temp, int bufsize, int len){
             ScanLine[j] = in[in_i];
             in_i++;
         }
+        first = 0;
         ScanLine[0] = 0;
-        ScanLine[0] = calculate_filterval(len,0);
+        ScanLine[0] = PNG_calc_filterval(len,0);
         applyFilter(filtered_Scan,len);
         temp_i = copyScantoBuf(temp,filtered_Scan,len,temp_i);
         i+=len;
@@ -1187,63 +1171,43 @@ void makefilteredbuffer(uint8_t* in, uint8_t* temp, int bufsize, int len){
     free(previous_ScanLine);
 }
 
-
-
 void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int bytepp)
 {
    // Exec_time_Start();
     bytespp = bytepp;
     struct IHDR_CHUNK ihdr;
     ihdr.height = height;
-    ihdr.width = width;
-    //resize_image(2,IDAT_input,&ihdr,1);
- 
+    ihdr.width = width; 
     unsigned long long ScanLineLen = (ihdr.width * bytespp) + 1;
     int Bufsize = ScanLineLen*ihdr.height;
     uint8_t *temp = malloc(Bufsize);
     //write_image_to_console(IDAT_input,&ihdr);
     int index = 0;
     int IDAT_i = 0;
-    /*
-    for (unsigned long long i = 0; i < ihdr.height * ScanLineLen; i++)
-    {
-        if (i % ScanLineLen == 0 || i == 0)
-        {
-            temp[i] = 0;
-        }
-        else
-        {
-            temp[i] = IDAT_input[index];
-            index++;
-        }
-    }*/
-
+    //this calculates the best filters and applies them
     makefilteredbuffer(IDAT_input,temp,Bufsize,ScanLineLen);
-   
-
-    uint8_t *ScanLine = malloc(ScanLineLen);
-    free(ScanLine);
     FILE *fp = fopen(PngName, "wb");
     fwrite(png_identifier, 1, 8, fp);
     fwrite(standard_ihdr_length, 1, 4, fp);
-    uint32_t w;
-    uint32_t h;
-    uint8_t b;
+    uint32_t w = 0;
+    uint32_t h = 0;
+    uint8_t b = 0; 
     b = 8;
-    w = __builtin_bswap32(ihdr.width);
-    h = __builtin_bswap32(ihdr.height);
-
+    w = ihdr.width;
+    h = ihdr.height;
+    // here we convert to big endian if system is little endian else do nothing and just write the values
+    if(Little_Endian){
+        PNG_change_endian(&w);
+        PNG_change_endian(&h);
+    }
     fwrite(IHDR_identifier, 1, 4, fp);
     fwrite(&w, 1, 4, fp);
     fwrite(&h, 1, 4, fp);
-
     uint8_t* buf = malloc(17);    
-
     buf[0] = IHDR_identifier[0];
     buf[1] = IHDR_identifier[1];
     buf[2] = IHDR_identifier[2];
     buf[3] = IHDR_identifier[3];
-
 
     // gets the individual bytes out of the 4 bytes value
     buf[4] = (w & 0x000000ffUL);
@@ -1278,22 +1242,17 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     fwrite(&png_crc,1,4,fp);
     free(buf);
 
-    uint32_t chunk_len = 24;
     unsigned long e=0;
     unsigned long fp_p = ftell(fp)-8;
-    //later on we need to split this up into multiple chunks
     
-    chunk_len = Png_deflate(temp, ScanLineLen, ihdr.height, bytespp,16834, fp);
+
+    e = PNG_deflate(temp, ScanLineLen, ihdr.height, bytespp,67536, fp);
     fwrite(zeroes,1,4,fp);
-    fwrite(IDAT_END_ID, 1, 4, fp);
-   // free(buf);
-    
+    fwrite(IDAT_END_ID, 1, 4, fp);    
     free(temp);
     free(IDAT_input);
     uint8_t EOI[] = {0xae, 0x42, 0x60, 0x82};
-
     fwrite(EOI, 1, 4, fp);
-    // fwrite();
     fclose(fp);
    // Exec_time_stop();
 }
