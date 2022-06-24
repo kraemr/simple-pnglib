@@ -1,0 +1,1 @@
+.\a.exe 1.png new.png 1
