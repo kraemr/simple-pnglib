@@ -39,8 +39,6 @@ https://www.w3.org/TR/PNG/
 
 <br />
 <br />
-<br />
-<br />
 
 ## Feel Free to donate if you want:
 https://www.buymeacoffee.com/rkraemer
