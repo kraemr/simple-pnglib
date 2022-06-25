@@ -3,7 +3,11 @@
 ## What is this for ? 
 
 This library can read pixel data out of a png and store it in RGBA format and can write it back to a png file.
-Later versions will include More Options, like writing image as greyscale,RGB,RGBA.
+Later versions will include More Options, like writing image as greyscale,RGB,RGBA or reading values differently.
+However this library is intended to be as simple as possible.
+As a lot of png libraries have a lot of features that are just confusing.
+
+
 
 ## How to use:
 
@@ -21,7 +25,13 @@ there are some example on how to use it in a program in example.c
 
 ## Note
 
-This Library has precompiled .dll and .so files if you wanted to you could also compile this by source and use your own zlib dll or so
+This Library has precompiled .dll and .so files if you wanted to 
+you could also compile this by source and use your own zlib dll or so files
+
+
+
+
+
 
 Feel Free to donate if you want:
 https://www.buymeacoffee.com/rkraemer
