@@ -40,8 +40,10 @@ Also if you want to write your own png-decoder or encoder a good place to start 
 https://www.w3.org/TR/PNG/
 
 
-
-
+\
+\
+\
+\
 
 Feel Free to donate if you want:
 https://www.buymeacoffee.com/rkraemer
