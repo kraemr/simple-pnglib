@@ -1,8 +1,8 @@
 # simple-pnglib
 
-How to use:
+## How to use:
 
-gcc yourfile.c pnglib.dll zlib.dll
+`gcc yourfile.c pnglib.dll zlib.dll`
 
 or 
 
