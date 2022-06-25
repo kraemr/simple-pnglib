@@ -4,13 +4,13 @@
 
 `gcc yourfile.c pnglib.dll zlib.dll`
 
-or 
+or \
 
-gcc yourfile.c pnglib.c -lz
+`gcc yourfile.c pnglib.c -lz`
 
-or 
+or \
 
-gcc yourfile.c pnglib.so zlib.so
+`gcc yourfile.c pnglib.so zlib.so`
 
 there are some example on how to use in example.c
 
