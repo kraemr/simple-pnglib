@@ -28,24 +28,21 @@ there are some example on how to use it in a program in example.c
 
 ## Note
 
-This Library works on Windows and Linux, however since this is still very early in development
-expect some inefficiencies,oddities,bugs and other growing pains.
-
+This Library works on Windows and Linux, however since this is still very early in development<br />
+expect some inefficiencies,oddities,bugs and other growing pains.<br />
 The Biggest deficiency is writing to a PNG file as i have not yet implemented any way 
-
-This Library has precompiled .dll and .so files if you wanted to 
-you could also compile this by source and use your own zlib dll or so files
-
+<br />
+This Library has precompiled .dll and .so files if you wanted to <br />you could also compile this by source and use your own zlib dll or so files
 Also if you want to write your own png-decoder or encoder a good place to start would be here: 
 https://www.w3.org/TR/PNG/
 
 
-\
-\
-\
+<br />
+<br />
+<br />
+<br />
 
-
-Feel Free to donate if you want:
+## Feel Free to donate if you want:
 https://www.buymeacoffee.com/rkraemer
 
 
