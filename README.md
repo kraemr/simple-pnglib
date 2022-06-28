@@ -33,8 +33,8 @@ expect some inefficiencies,oddities,bugs and other growing pains.<br />
 The Biggest deficiency is writing to a PNG file as i have not yet implemented any way 
 <br />
 This Library has precompiled .dll and .so files if you wanted to <br />you could also compile this by source and use your own zlib dll or so files<br />
-Also if you want to write your own png-decoder or encoder a good place to start would be here: <br />
-https://www.w3.org/TR/PNG/
+** Also if you want to write your own png-decoder or encoder a good place to start would be here: <br />
+https://www.w3.org/TR/PNG/ **
 
 
 <br />
