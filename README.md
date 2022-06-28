@@ -10,7 +10,9 @@ Later versions will include More Options, like writing image as greyscale,RGB,RG
 However this library is intended to be as simple as possible.
 As a lot of png libraries have a lot of features that are just confusing.
 
+## What to expect ?
 
+Just to temper your expectations, this will not have any more advanced features like iCC profiles,gamma,sRGB and other things like that. Its for reading the pixelvalues doing something to them or not and write them back to a file ... or not. This Library was more of a learning experience for me.
 
 ## How to use:
 
