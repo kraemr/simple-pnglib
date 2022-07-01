@@ -4,23 +4,28 @@
 struct pixel** pixel_rows; //TODO: Remove this later out of .h
 unsigned int Little_Endian; // if 1 System is little endian else Big endian
 int bytes_pp=0;
+int enc_bytespp = 0; // THIS IS USED FOR THE ENCODER FUNCTIONS
 ssize_t PNG_file_size=0; // FILE SIZE IN BYTES
-unsigned char* IDAT_Buffer; //this first holds the compressed bytes afterwards filtered and uncompressed bytes
-unsigned char* IDAT_Buffer2; //for copying the IDAT_buffer and operating on it
-uint8_t *def_IDAT_Buffer;
+uint8_t* IDAT_Buffer; //this first holds the compressed bytes afterwards filtered and uncompressed bytes
+uint8_t* IDAT_Buffer2; //for copying the IDAT_buffer and operating on it
+uint8_t* def_IDAT_Buffer;
+
 int crc_table_computed = 0;
 int bytespp=0;
 int subpos=0;
 uint8_t* scannd_scanline;
 /* Table of CRCs of all 8-bit messages. */
+
 unsigned long crc_table[256];
 unsigned long IDAT_Length=0;
 /* Flag: has the table been computed? Initially false. */
+
 struct IHDR_CHUNK ihdr_chunk;
 struct PLTE_CHUNK plte_chunk;
 struct TRNS_CHUNK trns_chunk;
 struct z_stream_s zst;
 struct pixel** pixel_rows;
+
 #define Greyscale 0
 #define Truecolour 2 
 #define Indexed_colour 3 
@@ -64,12 +69,12 @@ const uint8_t zeroes[] ={0,0,0,0};
 //******** Variable Definitions ********//}
 
 /*Pass in your width and height variables as reference
-Because this function will write width and height to these vars
-*/
+Because this function will write width and height to these vars*/
 void PNG_Get_Dim(int* w, int* h){
     *w = ihdr_chunk.width;
     *h = ihdr_chunk.height;
 }
+
 void PNG_Get_Pixelpp(pixel_pp* pp){
     
     long col_s = ihdr_chunk.height * sizeof(struct pixel*);
@@ -889,15 +894,17 @@ void PNG_Exit(){
 void PNG_Get_Pixelvals_RGBA(uint8_t** plist){
     long ScanLen = ihdr_chunk.width * bytes_pp;
     long size = ihdr_chunk.height * ScanLen;
+    struct pixel px;
     (*plist) = malloc(ihdr_chunk.width*ihdr_chunk.height*4);
     if(ihdr_chunk.colour_type == Truecolour_Alpha){
         perror("Pixelvals are already RGBA");
     }
     int i = bytes_pp;
+    
     int j = 0;
-    if(ihdr_chunk.colour_type == Truecolour_Alpha) j = bytes_pp;
+    if(ihdr_chunk.colour_type == Truecolour_Alpha || ihdr_chunk.colour_type == Truecolour ) j = bytes_pp;
     while(i < size){
-       
+        px = plte_pixels[IDAT_Buffer[i]];
         switch (ihdr_chunk.colour_type)
         {
             case Greyscale:
@@ -940,10 +947,16 @@ void PNG_Get_Pixelvals_RGBA(uint8_t** plist){
             ;break;
             case Indexed_colour:
                 //TODO: Implement converting IDAT_Buffer of Indexes To RGBA IDAT
+            (*plist)[j-3] = px.r;
+            (*plist)[j-2] = px.g;
+            (*plist)[j-1] = px.b;
+            (*plist)[j]   = px.A;
+            j+=bytes_pp;
             ;break;
         }
         
-        i +=bytes_pp;
+        if(ihdr_chunk.colour_type != Indexed_colour)i+=bytes_pp;
+        else i++;
     }
   
 }
@@ -1167,7 +1180,7 @@ int applyFilter(uint8_t* fil_Scan,int len){
     case SUB:
         //uint8_t* last;
         //uint8_t* current;
-        for(int i  = bytes_pp ;i < len; i += bytes_pp){
+        for(int i  = enc_bytespp ;i < len; i += enc_bytespp){
             //get_last_block();
             //get last 
             //get current 
@@ -1294,33 +1307,31 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     ihdr.colour_type = clr_out;
     ihdr.bit_depth = 8;
 
-    bytes_pp = set_Bytes_per_pixel(clr_in,ihdr.bit_depth);
-    bytespp = bytes_pp;
+    enc_bytespp = set_Bytes_per_pixel(clr_in,ihdr.bit_depth);
     uint8_t* in_buf = NULL; 
 
-    printf("clr in: %d  clr out: %d bytespp: %d ",clr_in,clr_out,bytespp);
+    printf("clr in: %d  clr out: %d bytespp: %d ",clr_in,clr_out,enc_bytespp);
 
     if(clr_in == clr_out){
-        bytespp = set_Bytes_per_pixel(clr_out,8);
-        bytes_pp = bytespp;
-        in_buf = malloc(ihdr.height*ihdr.width*bytes_pp);
-        for(int i = 0; i < ihdr.height*ihdr.width*bytes_pp;i++){
+        enc_bytespp = set_Bytes_per_pixel(clr_out,8);
+        in_buf = malloc(ihdr.height*ihdr.width*enc_bytespp);
+        for(int i = 0; i < ihdr.height*ihdr.width*enc_bytespp;i++){
             in_buf[i] = IDAT_input[i];
         }
         //RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,0);
     }
+
     else if(clr_in == 6 && clr_out == Greyscale){
-        bytespp = set_Bytes_per_pixel(clr_out,8);
-        bytes_pp = bytespp;
+        enc_bytespp = set_Bytes_per_pixel(clr_out,8);
         RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,0);
     }
+
     else if(clr_in == 6 && clr_out == Greyscale_Alpha){
-        bytespp = set_Bytes_per_pixel(clr_out,8);
-        bytes_pp = bytespp;
+        enc_bytespp = set_Bytes_per_pixel(clr_out,8);
         RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,1);
     }
 
-    unsigned long ScanLineLen = (ihdr.width * bytespp) + 1;
+    unsigned long ScanLineLen = (ihdr.width * enc_bytespp) + 1;
     int Bufsize = ScanLineLen*ihdr.height;
     uint8_t* temp = malloc(Bufsize);
     //RGBA_TO_RGB();
@@ -1382,7 +1393,7 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     free(buf);
     unsigned long e=0;
     unsigned long fp_p = ftell(fp)-8;
-    e = PNG_deflate(temp, ScanLineLen, ihdr.height, bytespp,67536, fp);
+    e = PNG_deflate(temp, ScanLineLen, ihdr.height, enc_bytespp,67536, fp);
     fwrite(zeroes,1,4,fp);
     fwrite(IDAT_END_ID, 1, 4, fp);    
     free(temp);
