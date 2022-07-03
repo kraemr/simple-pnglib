@@ -1084,11 +1084,6 @@ int ApplyFilterScan(){
 
 }
 
-//Code from StackOverflow
-int divRoundClosest(const int n, const int d)
-{
-  return ((n < 0) ^ (d < 0)) ? ((n - d/2)/d) : ((n + d/2)/d);
-}
 
 unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,int blocksize, FILE *fp)
 {
@@ -1273,7 +1268,6 @@ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_has
         out_i++;
     }
     //printf("\n out_i: %d",out_i);
-
 }
 
 //this creates the filtered buffer to write to the file
@@ -1290,7 +1284,6 @@ void makefilteredbuffer(uint8_t* in, uint8_t* temp, int bufsize, int len){
     for(int j = 0; j < len; j++){
         previous_ScanLine[j] = 0; 
     }    
-
     while(i < bufsize ){
         if(!first){
             for(int j = 0; j < len; j++){
