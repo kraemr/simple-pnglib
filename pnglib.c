@@ -16,6 +16,7 @@ uint8_t* scannd_scanline;
 int crc_table_computed = 0;
 int bytespp=0;
 int subpos=0;
+int is_initialized = 0;
 /* Table of CRCs of all 8-bit messages. */
 
 unsigned long crc_table[256];
@@ -28,11 +29,6 @@ struct TRNS_CHUNK trns_chunk;
 struct z_stream_s zst;
 struct pixel** pixel_rows;
 
-#define Greyscale 0
-#define Truecolour 2 
-#define Indexed_colour 3 
-#define Greyscale_Alpha 4 
-#define Truecolour_Alpha 6 
 #define NOFILTER 0
 #define SUB 1
 #define UP 2
@@ -77,25 +73,7 @@ void PNG_Get_Dim(int* w, int* h){
     *h = ihdr_chunk.height;
 }
 
-void PNG_Get_Pixelpp(pixel_pp* pp){
-    
-    long col_s = ihdr_chunk.height * sizeof(struct pixel*);
-    (*pp) = malloc(col_s);
-    long row_s = ihdr_chunk.width * sizeof(struct pixel);
-   
-    for(int i= 0; i < ihdr_chunk.height; i++){
-       (*pp)[i] = malloc(row_s);
-    }
-    
-    for(int i= 0; i < ihdr_chunk.height; i++){
-    
-        for(int j= 0; j < ihdr_chunk.width; j++){
-            (*pp)[i][j] = pixel_rows[i][j] ; 
-        }
-        
-    }
 
-}
 
 
 uint8_t* ScanLine;
@@ -765,12 +743,16 @@ int is_png(FILE* fp){
 
 void Print_Buffers(){            
 }
-
-void Convert_IDAT_BUF_TO_2D_PIX(){
+void PNG_Get_PNGINFO(PNG_INFO* pnginf_ref){
+    (*pnginf_ref) = ihdr_chunk;
+}
+//Pass your 2d pixel struct unitialized as a variable and just pass your buffer here
+// expects RGB or RGBA as input
+void PNG_Get_Pixelpp(pixel_pp* ppp,uint8_t* in,uint8_t clr){
     printf("\n Converting IDAT to 2d PIX\n");
-    pixel_rows = (struct pixel**)malloc(ihdr_chunk.height*sizeof(struct pixel*));
+    (*ppp) = (struct pixel**)malloc(ihdr_chunk.height*sizeof(struct pixel*));
     for(int i = 0 ; i < ihdr_chunk.height; i++ ){
-        pixel_rows[i] = (struct pixel*)malloc(ihdr_chunk.width*sizeof(struct pixel));   
+        (*ppp)[i] = (struct pixel*)malloc(ihdr_chunk.width*sizeof(struct pixel));   
     }
     int ScanLineLength = (ihdr_chunk.width * bytes_pp);
     int BufferSize = ScanLineLength * ihdr_chunk.height;
@@ -778,50 +760,46 @@ void Convert_IDAT_BUF_TO_2D_PIX(){
     int col = 0;
 
     for(int i = 0; i<BufferSize;i+=ScanLineLength ){
-     //   //////printf("\nScanline: %d",i);
         for(int j =bytes_pp +i; j < ScanLineLength+i+bytes_pp; j+=bytes_pp){
                     
-            pixel_rows[row][col].r = 0;
-            pixel_rows[row][col].g = 0;
-            pixel_rows[row][col].b = 0;
-            pixel_rows[row][col].A = 0;
-           // pixel_rows[row][col].GR = 0;
-                
-                switch (ihdr_chunk.colour_type)
+            (*ppp)[row][col].r = 0;
+            (*ppp)[row][col].g = 0;
+            (*ppp)[row][col].b = 0;
+            (*ppp)[row][col].A = 0;                
+                switch (clr)
                 {
-                    case 0: 
-                    pixel_rows[row][col].r = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].g = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].b = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].A = 255;
+                    case Greyscale: 
+                    (*ppp)[row][col].r = in[j-bytes_pp];
+                    (*ppp)[row][col].g = in[j-bytes_pp];
+                    (*ppp)[row][col].b = in[j-bytes_pp];
+                    (*ppp)[row][col].A = 255;
 
                     ;break;
-                    case 3: 
-                    pixel_rows[row][col].r = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].g = IDAT_Buffer[j-bytes_pp+1];
-                    pixel_rows[row][col].b = IDAT_Buffer[j-bytes_pp+2];
-                    pixel_rows[row][col].A = IDAT_Buffer[j-bytes_pp+3];
+                    case Indexed_colour: 
+                    (*ppp)[row][col].r = in[j-bytes_pp];
+                    (*ppp)[row][col].g = in[j-bytes_pp+1];
+                    (*ppp)[row][col].b = in[j-bytes_pp+2];
+                    (*ppp)[row][col].A = in[j-bytes_pp+3];
                     ;break;
-                    case 4: 
-                    pixel_rows[row][col].r = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].g = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].b = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].A = IDAT_Buffer[j-bytes_pp+1];
+                    case Greyscale_Alpha: 
+                    (*ppp)[row][col].r = in[j-bytes_pp];
+                    (*ppp)[row][col].g = in[j-bytes_pp];
+                    (*ppp)[row][col].b = in[j-bytes_pp];
+                    (*ppp)[row][col].A = in[j-bytes_pp+1];
                     ;break;
-                    case 6: 
-                    pixel_rows[row][col].r = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].g = IDAT_Buffer[j-bytes_pp+1];
-                    pixel_rows[row][col].b = IDAT_Buffer[j-bytes_pp+2];
-                    pixel_rows[row][col].A = IDAT_Buffer[j-bytes_pp+3];
+                    case Truecolour_Alpha: 
+                    (*ppp)[row][col].r = in[j-bytes_pp];
+                    (*ppp)[row][col].g = in[j-bytes_pp+1];
+                    (*ppp)[row][col].b = in[j-bytes_pp+2];
+                    (*ppp)[row][col].A = in[j-bytes_pp+3];
                     ;break;
-                    case 2:
-                    pixel_rows[row][col].r = IDAT_Buffer[j-bytes_pp];
-                    pixel_rows[row][col].g = IDAT_Buffer[j-bytes_pp+1];
-                    pixel_rows[row][col].b = IDAT_Buffer[j-bytes_pp+2];
-		            pixel_rows[row][col].A = IDAT_Buffer[j-bytes_pp+3];
+                    case Truecolour:
+                    (*ppp)[row][col].r = in[j-bytes_pp];
+                    (*ppp)[row][col].g = in[j-bytes_pp+1];
+                    (*ppp)[row][col].b = in[j-bytes_pp+2];
+		            (*ppp)[row][col].A = in[j-bytes_pp+3];
                     ;break;
-                    default: 
-                    ;break;
+                    default: ;break;
                 }
                   //  //////printf("\n pixel_rows[%d][%d] r:%d g:%d b:%d A:%d GR:%d ",row,col,pixel_rows[row][col].r,pixel_rows[row][col].g,pixel_rows[row][col].b,pixel_rows[row][col].A,pixel_rows[row][col].GR);
                 col++;
@@ -833,7 +811,7 @@ void Convert_IDAT_BUF_TO_2D_PIX(){
     //free(IDAT_Buffer2);
 }
 
-int PNG_Init(char* FileName,int Option){
+int PNG_Init(char* FileName){
     FILE* fp;
     if(PNG_file_exists(FileName)){
         PNG_file_size = PNG_get_size(FileName);
@@ -850,20 +828,17 @@ int PNG_Init(char* FileName,int Option){
                 decode_IDAT();
                 Convert_PLTE_To_Pixel(); // converts the plte entries to pixels
                 Make_IDATBUF_Plte(); //
-                Optionsflag = Option;
-                //Make_2D_pixel_struct_PLTE();
-                //if(Option == 2 || Option == 3){Convert_IDAT_BUF_TO_2D_PIX() ;}
                 free(IDAT_Buffer2);
+                is_initialized = 1;
             }
-            else{ // no indexes
+            else{ 
                 //decode without plte
                 get_IDAT(fp);
                 decode_IDAT();
                 Undo_Filters();
-                Optionsflag = Option;
                 printf(" OPT: %d ",Optionsflag);
-            	//if(Option == 2 || Option == 3){Convert_IDAT_BUF_TO_2D_PIX();    }            
                 free(IDAT_Buffer2);
+                is_initialized = 1;
         	}
         }
         else{
@@ -901,12 +876,14 @@ void PNG_Get_Pixelvals_RGBA(uint8_t** plist){
     if(ihdr_chunk.colour_type == Truecolour_Alpha){
         perror("Pixelvals are already RGBA");
     }
-    int i = bytes_pp;
-    
-    int j = 0;
-    if(ihdr_chunk.colour_type == Truecolour_Alpha || ihdr_chunk.colour_type == Truecolour ) j = bytes_pp;
+    int i = bytes_pp-1;
+    if(ihdr_chunk.colour_type == Greyscale){
+        i = bytes_pp;
+    }
+    int j = 0 ;
+    if(ihdr_chunk.colour_type == Truecolour_Alpha || ihdr_chunk.colour_type == Truecolour ) j = 3;
     while(i < size){
-        px = plte_pixels[IDAT_Buffer[i]];
+        
         switch (ihdr_chunk.colour_type)
         {
             case Greyscale:
@@ -931,14 +908,11 @@ void PNG_Get_Pixelvals_RGBA(uint8_t** plist){
             j++;
             break;
             case Truecolour:
-            (*plist)[j] = IDAT_Buffer[i-2];
-            j++;
-            (*plist)[j] = IDAT_Buffer[i-1];
-            j++;
-            (*plist)[j] = IDAT_Buffer[i];
-            j++;
+            (*plist)[j-3] = IDAT_Buffer[i-2];
+            (*plist)[j-2] = IDAT_Buffer[i-1];
+            (*plist)[j-1] = IDAT_Buffer[i];
             (*plist)[j] = 255;
-            j++;
+            j+=4;
             break;
             case Truecolour_Alpha:
             (*plist)[j-3] = IDAT_Buffer[i-3];
@@ -948,6 +922,7 @@ void PNG_Get_Pixelvals_RGBA(uint8_t** plist){
             j+=bytes_pp;
             ;break;
             case Indexed_colour:
+            px = plte_pixels[IDAT_Buffer[i]];
                 //TODO: Implement converting IDAT_Buffer of Indexes To RGBA IDAT
             (*plist)[j-3] = px.r;
             (*plist)[j-2] = px.g;
@@ -971,10 +946,7 @@ void PNG_Get_Pixelvals(uint8_t** plist){
     }
 }
 
-
 //######## pngreading Functions #########//}
-
-
 
 //........ PNGENCODING .........//{
    /* Make the table for a fast CRC. */
@@ -995,8 +967,7 @@ void PNG_Get_Pixelvals(uint8_t** plist){
      }
      crc_table_computed = 1;
    }
-
-   /* Update a running CRC with the bytes buf[0..len-1]--the CRC
+/* Update a running CRC with the bytes buf[0..len-1]--the CRC
       should be initialized to all 1's, and the transmitted value
       is the 1's complement of the final running CRC (see the
       crc() routine below). */   
@@ -1011,13 +982,11 @@ void PNG_Get_Pixelvals(uint8_t** plist){
             }
     return c;
     }
-   
-    /* Return the CRC of the bytes buf[0..len-1]. */
+       /* Return the CRC of the bytes buf[0..len-1]. */
     unsigned long crc(unsigned char *buf, int len)
     {
      return PNG_update_crc(0xffffffffL, buf, len) ^ 0xffffffffL;
     }
-
 //Writes the Chunk length and IDAT identifier
 void write_chnk_len_IDAT(unsigned int chnk_len, FILE* fp){
     unsigned int Chunk_length = chnk_len;
@@ -1026,23 +995,11 @@ void write_chnk_len_IDAT(unsigned int chnk_len, FILE* fp){
     fwrite(IDAT_ID, 1, 4, fp);
 }
 
-void PNG_make2d_Idat(uint8_t*** out,uint8_t** in,int w, int h){
-    (*out) = (uint8_t**)malloc(h*sizeof(uint8_t*));
-    int in_i = 0; 
-    for(int i=0;i < h; i++ ){
-        (*out)[i] = malloc(w*4);
-        for(int j = 0 ; j < w*4 ; j++){
-            (*out)[i][j] = (*in)[in_i];
-            in_i++;
-        }
-    }
-}
-
-void PNG_mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale){
+void PNG_mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale,int clr){
     pixel_pp pp;
     pixel_pp pp_sc;//scaled 2d pixel
    // PNG_make2d_Idat(&p_vals2d,buf,w,h);
-    PNG_Get_Pixelpp(&pp);
+    PNG_Get_Pixelpp(&pp,buf,clr);
     w/=scale;
     h/=scale;
 
@@ -1084,8 +1041,7 @@ int ApplyFilterScan(){
 
 }
 
-
-unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,int blocksize, FILE *fp)
+unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,int blocksize,int bits, FILE *fp)
 {
     unsigned char out[blocksize];
     int e = 0;
@@ -1094,7 +1050,24 @@ unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
     defstream.zfree = 0;
     defstream.opaque = 0;
     defstream.next_in = (Bytef* )t;
-    defstream.avail_in = (height*ScanLineLen);
+   switch(bits)
+   {
+   case 4:
+                  defstream.avail_in = (height*ScanLineLen)/2;
+    break;
+    case 2:
+               defstream.avail_in = (height*ScanLineLen)/4;
+    break;
+    case 1:
+           defstream.avail_in = (height*(ScanLineLen -1 ) )/8;
+           defstream.avail_in += height; 
+    break;
+   
+   default:
+       defstream.avail_in = (height*ScanLineLen);
+    break;
+   }
+   printf("\navail in %d \n",defstream.avail_in);
     deflateInit(&defstream, Z_DEFLATED);
 
     unsigned long bytes_written=0;
@@ -1203,10 +1176,13 @@ int copyScantoBuf(uint8_t* fil_buf,uint8_t* fil_Scan,int len,int buf_i){
     return buf_i;
 }
 //expects RGB or RGBA
-void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_hasAlpha){
+ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_hasAlpha,int bitdepth){
     int size = 0;
     int bytepp = 0;
     int grbytepp = 0;
+    uint8_t val=0;
+    uint8_t bit_pos=0;
+    uint8_t OrMask=0;
     if(gr_hasAlpha) grbytepp = 2;
     else grbytepp = 1;
     if(isRGB){
@@ -1234,12 +1210,14 @@ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_has
     */
    // Y = 0.299 R + 0.587 G + 0.114 B
     //printf("size: %d",size);
-    for(int i = bytepp; i < size; i+=bytepp){
-        if(bytepp == 4){
-            pix.r = in[i-3];
-            pix.g = in[i-2];
-            pix.b = in[i-1];
-            pix.A = in[i];
+
+    if(bitdepth == 8){
+        for(int i = bytepp; i < size; i+=bytepp){
+            if(bytepp == 4){
+                pix.r = in[i-3];
+                pix.g = in[i-2];
+                pix.b = in[i-1];
+                pix.A = in[i];
 /*
             R = (float)pix.r ;
             R *= 0.299f;
@@ -1248,13 +1226,13 @@ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_has
             B = (float)pix.b;
             B *= 0.114f;
 */
-            (*out)[out_i] = (pix.r + pix.b + pix.g) /3;
-                if(gr_hasAlpha){
-                    out_i++;
-                    (*out)[out_i] = pix.A;
+                (*out)[out_i] = (pix.r + pix.b + pix.g) /3;
+                    if(gr_hasAlpha){
+                        out_i++;
+                        (*out)[out_i] = pix.A;
                 }
-        }
-        else{
+            }
+            else{
             pix.r = in[i-2];
             pix.g = in[i-1];
             pix.b = in[i];
@@ -1264,9 +1242,51 @@ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_has
                 (*out)[out_i] = pix.A;
             }
 
-        }
+            }
         out_i++;
+        }
     }
+    else{
+        for(int i =bytepp-1 ; i < size;i+=bytepp){
+            if(isRGB){
+                pix.r = in[i-2];
+                pix.g = in[i-1];
+                pix.b = in[i];      
+            }else{
+                pix.r = in[i-3];
+                pix.g = in[i-2];
+                pix.b = in[i-1];      
+            }
+            uint8_t tmp=0;
+            switch (bitdepth)
+            {
+            case 1:
+                tmp = (pix.r+pix.b+pix.g)/3;
+                tmp > 128 ? (val = (1 << bit_pos)  | val) : 0;
+              //  printf(" %d", i);
+                bit_pos++;             
+                if(bit_pos == 8 || bit_pos == w*h) {
+                    bit_pos = 0;
+                    //(*out)[out_i] = (val * 0x0202020202ULL & 0x010884422010ULL) % 1023; //reverses the bits with 64bit multiplication
+                    (*out)[out_i] =((val * 0x0802LU & 0x22110LU) | (val * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16;
+                    val =0;
+                    out_i++;
+                }
+           ; break;
+            case 2:
+
+            break;
+            case 4:
+
+            break;
+            
+            default:
+                break;
+            }
+        }
+    }
+    printf(" %d ",out_i);
+
     //printf("\n out_i: %d",out_i);
 }
 
@@ -1296,20 +1316,16 @@ void makefilteredbuffer(uint8_t* in, uint8_t* temp, int bufsize, int len){
         }
         first = 0;
         ScanLine[0] = 0;
-        ScanLine[0] = PNG_calc_filterval(len,0);
+        //ScanLine[0] = PNG_calc_filterval(len,0);
         applyFilter(filtered_Scan,len);
         temp_i = copyScantoBuf(temp,filtered_Scan,len,temp_i);
         i+=len;
     }
-
     free(ScanLine);
     free(filtered_Scan);
     free(previous_ScanLine);
-        free(in);
+    free(in);
 }
-
-
-
 //counts unique values and checks if unique values < 256
 // if < 256 -> indexed colour is possible 
 int indexed_ccheck(uint8_t* in, int len){
@@ -1339,26 +1355,23 @@ int indexed_ccheck(uint8_t* in, int len){
 void make_indexed_buffer(uint8_t* in, uint8_t* temp, int bufsize){
 
 }
-
 //Expects RGBA for now
-void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int clr_out,int clr_in)
+void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int clr_out,int clr_in,unsigned char bitdepth)
 {
+    Little_Endian = isLittle_Endian();
     int indexed_possible = 0;
    // Exec_time_Start();
     struct IHDR_CHUNK ihdr;
     ihdr.height = height;
     ihdr.width = width; 
     ihdr.colour_type = clr_out;
-    ihdr.bit_depth = 8;
-
+    ihdr.bit_depth = bitdepth;
     enc_bytespp = set_Bytes_per_pixel(clr_in,ihdr.bit_depth);
     uint8_t* in_buf = NULL; 
+    
     //this will contain the transformed pixel values in a 1D list 
     //enc_bytespp will define how to get a pixels values
-
-    printf("clr in: %d  clr out: %d bytespp: %d ",clr_in,clr_out,enc_bytespp);
-
-
+    // printf("clr in: %d  clr out: %d bytespp: %d ",clr_in,clr_out,enc_bytespp);
     //TODO: relocate the if statements into another function for more readability
     if(clr_in == clr_out){
         enc_bytespp = set_Bytes_per_pixel(clr_out,8);
@@ -1368,9 +1381,8 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
         }
         //RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,0);
     }
-
     else if(clr_out == Truecolour && clr_in == Truecolour_Alpha){
-         enc_bytespp = set_Bytes_per_pixel(clr_out,8);
+        enc_bytespp = set_Bytes_per_pixel(clr_out,8);
         in_buf = malloc(ihdr.height*ihdr.width*enc_bytespp);
         int in_buf_i = 2;
         // 
@@ -1381,30 +1393,49 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
             in_buf_i+=enc_bytespp;         
         }
     }
-
     else if(clr_in == Truecolour_Alpha && clr_out == Greyscale){
         enc_bytespp = set_Bytes_per_pixel(clr_out,8);
-        RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,0);
+        RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,0,bitdepth);
     }
-
     else if(clr_in == Truecolour_Alpha && clr_out == Greyscale_Alpha){
         enc_bytespp = set_Bytes_per_pixel(clr_out,8);
-        RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,1);
+        RGB_to_GreyScale(IDAT_input,&in_buf,ihdr.width,ihdr.height,0,1,bitdepth);
     }
-
     else if(clr_in == Truecolour_Alpha && clr_out == Indexed_colour){
         //NO FILTERING IS NEEEDED
         indexed_possible = indexed_ccheck(IDAT_input,ihdr.width * ihdr.height);
         enc_bytespp = 1;    
     }
-
+   printf("enc bpp %d",enc_bytespp);
     unsigned long ScanLineLen = (ihdr.width * enc_bytespp) + 1;
     int Bufsize = ScanLineLen*ihdr.height;
+    printf(" %d ",Bufsize);
     uint8_t* temp = malloc(Bufsize);
-  
-    if(indexed_possible == 0)makefilteredbuffer(in_buf,temp,Bufsize,ScanLineLen);
+    
+    printf("indexed is possible %d",indexed_possible);
+    if(indexed_possible == 0 && bitdepth >=8)makefilteredbuffer(in_buf,temp,Bufsize,ScanLineLen);
+    else if(bitdepth < 8){
+        int temp_i = 0;
+        for(int i = 0; i < Bufsize;i++){
+            if(i % ScanLineLen == 0){
+                temp[i] = 0; 
+            }
+            else{
+                 temp[i] = in_buf[temp_i];
+                 temp_i++; 
+            }
+        }
+        free(in_buf);
+    }
     else{
         make_indexed_buffer(in_buf,temp,Bufsize); //TODO: IMPLEMENT THIS
+    }
+    int jbM=0;
+     while (jbM < 10)
+    {
+        //printf(" %u ",temp[jbM]);
+        //printf(" %u ",Bufsize);
+        jbM++;
     }
     //free(in_buf);
     FILE *fp = fopen(PngName, "wb");
@@ -1423,7 +1454,6 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     fwrite(IHDR_identifier, 1, 4, fp);
     fwrite(&w, 1, 4, fp);
     fwrite(&h, 1, 4, fp);
-
     uint8_t* buf = malloc(17);    
     buf[0] = IHDR_identifier[0];
     buf[1] = IHDR_identifier[1];
@@ -1444,7 +1474,6 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     buf[14] = 0;
     buf[15] = buf[14];
     buf[16] = buf[15];
-    
     b = ihdr.bit_depth;
     fputc(b, fp);
     b = ihdr.colour_type;
@@ -1460,15 +1489,14 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     free(buf);
     unsigned long e=0;
     unsigned long fp_p = ftell(fp)-8;
-    e = PNG_deflate(temp, ScanLineLen, ihdr.height, enc_bytespp,67536, fp);
+    e = PNG_deflate(temp, ScanLineLen, ihdr.height, enc_bytespp,16384,bitdepth ,fp);
     fwrite(zeroes,1,4,fp);
     fwrite(IDAT_END_ID, 1, 4, fp);    
     free(temp);
     uint8_t EOI[] = {0xae, 0x42, 0x60, 0x82};
     fwrite(EOI, 1, 4, fp);
     fclose(fp);
-   // Exec_time_stop();
-   
+   // Exec_time_stop();   
 }
 //........ PNGENCODING .........//]
 
