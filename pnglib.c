@@ -1,34 +1,38 @@
 #include "pnglib.h"
-
 //******** Variable Definitions ********//{
 struct pixel** pixel_rows; //TODO: Remove this later out of .h
 unsigned int Little_Endian; // if 1 System is little endian else Big endian
-int bytes_pp=0;
+int bytes_pp=0; 
 int enc_bytespp = 0; // THIS IS USED FOR THE ENCODER FUNCTIONS
-
 ssize_t  PNG_file_size=0; // FILE SIZE IN BYTES
 uint8_t* IDAT_Buffer; //this first holds the compressed bytes afterwards filtered and uncompressed bytes
 uint8_t* IDAT_Buffer2; //for copying the IDAT_buffer and operating on it
 uint8_t* def_IDAT_Buffer;
 uint8_t* png_crc_buf;
-uint8_t* scannd_scanline;
-
+//uint8_t* scannd_scanline;
+uint8_t* ScanLine;
+uint8_t* previous_ScanLine;
+int ScanLineLength=0;
 int crc_table_computed = 0;
 int bytespp=0;
 int subpos=0;
 int is_initialized = 0;
+uint32_t bytes_read=0;
 /* Table of CRCs of all 8-bit messages. */
-
 unsigned long crc_table[256];
 unsigned long IDAT_Length=0;
 /* Flag: has the table been computed? Initially false. */
-
 struct IHDR_CHUNK ihdr_chunk;
 struct PLTE_CHUNK plte_chunk;
 struct TRNS_CHUNK trns_chunk;
 struct z_stream_s zst;
-struct pixel** pixel_rows;
-
+struct pixel* plte_pixels;
+int plte_map_size = 0;
+struct plte_map_element{
+    struct pixel px; // input
+    int value;
+};
+struct plte_map_element* pmap;
 #define NOFILTER 0
 #define SUB 1
 #define UP 2
@@ -66,25 +70,14 @@ const uint8_t Trns_id[]={
 const uint8_t zeroes[] ={0,0,0,0};
 //******** Variable Definitions ********//}
 
-/*Pass in your width and height variables as reference
-Because this function will write width and height to these vars*/
-void PNG_Get_Dim(int* w, int* h){
-    *w = ihdr_chunk.width;
-    *h = ihdr_chunk.height;
+void Print_Pixel(struct pixel px){
+    printf("Pixel Values r: %u, b: %u, g: %u, A: %u ",px.r,px.g,px.b,px.A);
 }
-
-
-
-
-uint8_t* ScanLine;
-uint8_t* previous_ScanLine;
-int ScanLineLength=0;
 
 void get_last_block(uint8_t* lastblock,uint8_t* Scanline,int pos){
     int index = 0;
     for(int i = pos; i<pos+bytes_pp;i++){
         lastblock[index] = Scanline[i];
-       // ////printf("lastblock %d   %d at %d\n ",lastblock[index],index, i);
         index++;
     }
 }
@@ -92,7 +85,6 @@ void get_current_block(uint8_t* currblock,uint8_t* Scanline,int pos){
     int index = 0;
     for(int i = pos; i<pos+bytes_pp;i++){
         currblock[index] = Scanline[i];
-       // ////printf("currblock %d   %d at %d\n ",currblock[index],index,i);
         index++;
     }
 }
@@ -100,19 +92,15 @@ void Add_blocks(uint8_t* lastblock,uint8_t* currblock,uint8_t* Scanline,int pos)
     for(int i = 0 ; i< bytes_pp; i++){
         currblock[i]+=lastblock[i];
         Scanline[pos] = currblock[i];
-       // ////printf("Scanline[%d] is now  %d",pos,currblock[i]);
         pos++;
     }
- 
 }
 
 void Undo_Sub(uint8_t* ScanLine, int ScanLineLength){
     uint8_t* lastblock = malloc(bytes_pp);
     uint8_t* currblock = malloc(bytes_pp);
     int first = 1;
-    //////printf("\n");
     for(int i = 0 ; i < ScanLineLength-bytes_pp; i+=bytes_pp){
-                //////printf("i: %d",i);
                 if(first){
                 get_last_block(lastblock,ScanLine,i);
                 get_current_block(lastblock,ScanLine,i);
@@ -133,24 +121,6 @@ void zero_block(uint8_t* block){
         block[i]=0;
     }
 }
-
-void get_last_Line(int pos,int ScanLineLength,uint8_t* prev_scan){
-    //printf("\n scan end: %d",pos);
-    pos++;
-    pos -= ScanLineLength;
-    //printf(" %u ",IDAT_Buffer2[pos-1]);
-    //printf("\n scan start: %d",pos);
-
-    int i;
-    for(int j = pos; j <pos+ScanLineLength-1; j++)
-    {
-       // prev_scan[i] = IDAT_Buffer2[j];
-        ////printf(" prev Scanline: %u at %d",prev_scan[j-1-pos],j);
-        //  free(b);
-        i++;
-        }
-}
-
 //gets the last Scanline
 void Undo_Up(int ScanLineLength){
   for(int i = 0;i<ScanLineLength-1;i++){
@@ -170,27 +140,22 @@ void Undo_Avg(){
                 for(int j = i; j < bytes_pp+i; j++){
                     a = 0;
                     b = curr_block[j-i];
-                    ScanLine[j] += ((a + b) /2) ;
-                
-                    ////printf("Flooring a:%u and b:%u = %u",a,b,ScanLine[j]);
+                    ScanLine[j] += ((a + b) /2) ;                
                 }
                 }
                 else{
                 get_last_block(last_block,ScanLine,i-bytes_pp);
                 get_current_block(curr_block,previous_ScanLine,i);
-
                 for(int j = i; j < bytes_pp+i; j++){
                     a = last_block[j-i];
                     b = curr_block[j-i];
                     ScanLine[j]+=  ((a + b) /2);
-                   // //printf("Flooring a:%u and b:%u = %u",a,b,ScanLine[j]);
                 }
                 }
     }
     free(last_block);
     free(curr_block);
 }
-
 /*
     x = current_byte
     a = byte before current byte
@@ -255,7 +220,6 @@ void Undo_Paeth(){
     free(last_scan_curr);
     free(current);
 }
-
 //get a reference to the IDAT_i 
 int Copy_ScanLine(uint8_t* ScanLine,int ScanLineLength,int IDAT_i){
     for(int j = 0; j < ScanLineLength-1;j++){
@@ -264,7 +228,6 @@ int Copy_ScanLine(uint8_t* ScanLine,int ScanLineLength,int IDAT_i){
     }  
     return IDAT_i;
 }
-
 //TODO: Implement Paeth and Average
 void Undo_Filters(){
     ScanLineLength = (ihdr_chunk.width * bytes_pp) + 1;
@@ -273,59 +236,46 @@ void Undo_Filters(){
     int IDAT_i = 0;
     previous_ScanLine = malloc(ScanLineLength -1);
     ScanLine = malloc(ScanLineLength -1);
-    //printf("BufferSize %d ",BufferSize);
-   // //printf("\n Scanline Addr: %p",&ScanLine);
     for(int i = 0;i< BufferSize;i+=ScanLineLength){               
                 if(i == 0){
-                    for(int j = i+1 ; j <ScanLineLength+i;j++)
-                    {
+                    for(int j = i+1 ; j <ScanLineLength+i;j++){
                         previous_ScanLine[j-1-i] = 0;
                         ScanLine[j-1-i] = IDAT_Buffer2[j];
                     }
                 }
                 else{
-                    for(int j = 0; j < ScanLineLength-1; j++){
-                        previous_ScanLine[j] = ScanLine[j];
-                    }
-                    for(int j = i+1 ; j <ScanLineLength+i;j++)
-                    {
-                        ScanLine[j-1-i] = IDAT_Buffer2[j];
-                    }
+                    for(int j = 0; j < ScanLineLength-1; j++)previous_ScanLine[j] = ScanLine[j];
+                    for(int j = i+1 ; j <ScanLineLength+i;j++)ScanLine[j-1-i] = IDAT_Buffer2[j];
                 }
                 switch (IDAT_Buffer2[i])
                 {
                 case NOFILTER:
-                    //printf("\n No Filter at %d",i);
                    IDAT_i = Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);
                 ;break;
 
                 case SUB:
-                    //printf("\n Sub Filter a %d IDAT: %d",i,IDAT_i);
                     Undo_Sub(ScanLine,ScanLineLength);
-                   IDAT_i = Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);
-                    //printf("\n after IDAT: %d",IDAT_i);
-                   ;break;
+                    IDAT_i = Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);
+                    break;
                 case UP:
-                    //printf("\n Up Filter at %d",i);
-                    //get_last_Line(i,ScanLineLength,previous_ScanLine);
                     Undo_Up(ScanLineLength);
                     IDAT_i = Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);
                 ;break;
 
                 case AVERAGE:
-                    //printf("\n Average Filter at %d",i);
+                    ////printf("\n Average Filter at %d",i);
                     Undo_Avg();
                     IDAT_i = Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);
                 ;break;
 
                 case PAETH:
-                    //printf("\n Paeth Filter at %d",i);
+                    ////printf("\n Paeth Filter at %d",i);
                     Undo_Paeth();
                     IDAT_i = Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);
                 ;break;
 
                 default:
-                   // printf("Unknown Filter at %d filter is:%d ",i,IDAT_Buffer2[i]);
+                   // //printf("Unknown Filter at %d filter is:%d ",i,IDAT_Buffer2[i]);
                 Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);;break;
                 break;
                 }
@@ -333,40 +283,28 @@ void Undo_Filters(){
             free(ScanLine);
             free(previous_ScanLine);
         }
-
-
-
-
-
-
 //######## pngreading Functions #########//{
-
 long long int PNG_get_size(char *pathname){
     struct stat file_stat;
     stat(pathname,&file_stat);
     return file_stat.st_size;
 }
-
 int PNG_file_exists(char* file_name){
   if( access( file_name, F_OK ) != -1)return 1;
   else return 0;  
-    //perror("file is not found");
+    ////perror("file is not found");
 }
 int isLittle_Endian(){
     int num = 1;
-    if (*(char *)&num == 1)return 1;//printf("Little-Endian\n");
-    else return 0;//printf("Big-Endian\n");
+    if (*(char *)&num == 1)return 1;
+    else return 0;
 }
-
-
 void PNG_change_endian(unsigned int* n){
 *n = (*n >> 24) | ((*n >> 8) & 0x0000ff00) | ((*n << 8) & 0x00ff0000) | (*n << 24);
 }
-
 unsigned int compare_bytes_with_id(FILE* fp,unsigned char* buf,const uint8_t id[4]){
     if(fp == NULL){
         for(int i = 0 ; i< 4;i++){
-            ////////printf(" %u vs %u",buf[i],id[i]);
             if(buf[i] != id[i]){
                 return 0;
             }
@@ -375,10 +313,9 @@ unsigned int compare_bytes_with_id(FILE* fp,unsigned char* buf,const uint8_t id[
     else{
         unsigned char* temp;
         temp = malloc(4);
-        fread(temp,1,4,fp);
+        bytes_read = fread(temp,1,4,fp);
         for(int i=0;i<4;i++){
             if(temp[i] != id[i]){
-              //  //////printf(" %u not matching id %u\n",temp[i],id[i]);
                 free(temp);
                 return 0;
             } 
@@ -388,12 +325,10 @@ unsigned int compare_bytes_with_id(FILE* fp,unsigned char* buf,const uint8_t id[
     return 1; 
 }
 
-
-
 unsigned int read_chunk_length(FILE* fp){
     unsigned char* temp=malloc(4);
     fseek(fp,-8,SEEK_CUR); // seek to the start of the lengths
-    fread(temp,1,4,fp);
+    bytes_read = fread(temp,1,4,fp);
     unsigned int length=*(unsigned int*)(temp);
 
     if(Little_Endian){
@@ -421,47 +356,29 @@ void get_IDAT(FILE* fp){
     unsigned int IDAT_COUNT=0;
 
     while(!feof(fp)){
-        fread(temp,1,1,fp);
+        bytes_read = fread(temp,1,1,fp);
         if(temp[0] == IDAT_ID[0]){
             fseek(fp,-1,SEEK_CUR);
-            fread(temp,1,4,fp);
-
+            bytes_read = fread(temp,1,4,fp);
             if(compare_bytes_with_id(NULL,temp,IDAT_ID)){
                 i = 0; IDAT_COUNT++; 
-             //   //////printf("found IDAT\n");
                 chnk_length = read_chunk_length(fp);
-                //printf("chnkk len: %d",chnk_length);
                 while(i < chnk_length) {
-                    fread(temp,1,1,fp);
+                    bytes_read = fread(temp,1,1,fp);
                     IDAT_Buffer[IDAT_i] = temp[0];
                     IDAT_i++;
                     i++;
-       
                 }
-              //  //////printf(" IDAT: %u temp: %x IDAT_i %d",IDAT_Buffer[IDAT_i],temp[0],IDAT_i);
             }
             else if(compare_bytes_with_id(NULL,temp,IDAT_END_ID)){
-            //    //////printf("Found IDAT_END\n");
-                //realloc(IDAT_Buffer,IDAT_i);
                 IDAT_Length = IDAT_i;
-                ////printf("IDAT Length: %u",IDAT_Length);
                 break;
             }
         }
     //Puts all the IDAT DATA in an 
     }
-    //////printf("found %d IDAT CHUNKS", IDAT_COUNT);
     free(temp);
 }
-
-
-
-void print_decoded(){
-    for(int i = 0; i<ihdr_chunk.width * ihdr_chunk.height * ihdr_chunk.bit_depth;i++ ){
-        //printf(" %u ",IDAT_Buffer2[i]);
-    }
-}
-
 //decompresses the idat buffer with inflate()
 void decode_IDAT(){
     IDAT_Buffer2=malloc(ihdr_chunk.width * ihdr_chunk.height * ihdr_chunk.bit_depth);
@@ -483,40 +400,33 @@ void decode_IDAT(){
     inflateInit(&infstream);
     e = inflate(&infstream, Z_NO_FLUSH);
     inflateEnd(&infstream);
-    //////printf("inflate return %d",e);
     free(IDAT_Buffer);//free it here since it gets allocated later on. To avoid MemLeak
-    print_decoded();
 }
-
-
 
 void get_PLTE(FILE* fp){
     unsigned char* b = malloc(4);
     while(!feof(fp)){
-        fread(b,1,1,fp);
+        bytes_read = fread(b,1,1,fp);
         if(b[0] == PLTE_identifier[0]){
             fseek(fp,-1,1); //go back one to read the whole thing
-            fread(b,1,4,fp);
+            bytes_read = fread(b,1,4,fp);
             if(compare_bytes_with_id(NULL,b,PLTE_identifier)){ // check if the 4 bytes match the identifier
                 fseek(fp,-8,SEEK_CUR); // go back to the lengths
-                fread(b,1,4,fp); // read the length
+                bytes_read = fread(b,1,4,fp); // read the length
                 plte_chunk.length = *(unsigned int*)(b);
                 if(Little_Endian == 1)PNG_change_endian(&plte_chunk.length); // get the chunk length
-                ////////printf("plte chunk len: %u ",plte_chunk.length);
                 fseek(fp,4,SEEK_CUR);      
                 break;
             }
         }
     }
-    plte_chunk.length % 4 == 0 ? 0 /* is divisible by three */ : perror("Plte Chunk Length is NOT divisble by three");
-    free(b);
-    b= malloc(4 * sizeof(unsigned char));
-    plte_chunk.Chunk_Data = malloc(plte_chunk.length * sizeof(unsigned int) );
+    plte_chunk.length % 4 == 0 ? 0:0; /* is divisible by three */  //perror("Plte Chunk Length is NOT divisble by three");
+    plte_chunk.Chunk_Data = malloc(plte_chunk.length);
     for(int i=0;i<plte_chunk.length;i++){
-        fread(b,1,1,fp);
+        bytes_read = fread(b,1,1,fp);
         plte_chunk.Chunk_Data[i] = b[0];
     }
-    fread(b,1,4,fp);
+    bytes_read = fread(b,1,4,fp);
     plte_chunk.CRC = *(unsigned int*)(b);
     if(Little_Endian == 1)PNG_change_endian(&plte_chunk.CRC);
     free(b);
@@ -526,14 +436,13 @@ int is_IHDR(FILE* fp){
     unsigned char* b = malloc(4);
    
     fseek(fp,4,SEEK_CUR);
-        fread(b,1,4,fp);
+        bytes_read = fread(b,1,4,fp);
         for(int i=0;i<4;i++){
             
             if(b[i] != IHDR_identifier[i]){
                 free(b);
                 return 0;
             }
-            ////////printf(" %x vs %x , ",b[i] , IHDR_identifier[i] );
         }
         free(b);
         return 1;
@@ -554,20 +463,6 @@ int set_Bytes_per_pixel(int clr,int bit_depth){
     return bpp;
 }
 
-void Print_trns(){
-    for(int i = 0; i< trns_chunk.length; i++){
-        ////printf("%u ",trns_chunk.Chunk_Data[i]);
-    }
-}
-
-struct pixel* plte_pixels;
-
-void Print_PLTE_Pixel(){
-    for(int i = 0; i< plte_chunk.length / 3 ; i++){
-      //  ////printf("\n %u %u %u",plte_pixels[i].r,plte_pixels[i].g,plte_pixels[i].b);
-    }
-}
-
 void Convert_PLTE_To_Pixel(){
     plte_pixels =(struct pixel*)malloc(plte_chunk.length/3 * sizeof(struct pixel));
     int plte_i = 0;
@@ -583,110 +478,48 @@ void Convert_PLTE_To_Pixel(){
         }
         plte_i++;
     }
-    Print_PLTE_Pixel();
 }
-
 //Creates IDATbuffer from PLTE
 void Make_IDATBUF_Plte( ){
     int ScanLen = (ihdr_chunk.width * 4)+1;
-    IDAT_Buffer = malloc(ihdr_chunk.height * ihdr_chunk.width * 4);
+    IDAT_Buffer = malloc(ihdr_chunk.height * (ihdr_chunk.width)+ihdr_chunk.width);
     uint32_t IDAT_i= 0;
     uint32_t IDAT2_i= 0;
     uint8_t plte_i = 0;
-    for(int i =0 ; i < ihdr_chunk.height; i++){
-        for(int j = 0; j < ihdr_chunk.width;j++){
-            j == 0 ? IDAT_i++: 0 ;
-            plte_i = IDAT_Buffer2[IDAT_i];
-            
-            IDAT_Buffer[IDAT2_i] = plte_pixels[plte_i].r;
-            IDAT2_i++;
-            IDAT_Buffer[IDAT2_i] = plte_pixels[plte_i].g;
-            IDAT2_i++;
-            IDAT_Buffer[IDAT2_i] = plte_pixels[plte_i].b;
-            IDAT2_i++;
-            IDAT_Buffer[IDAT2_i] = plte_pixels[plte_i].A;
-            IDAT2_i++;
-            IDAT_i++;
-        }   
-    }
- //  printf(" IDATBUF len: %u h: %u w: %u bpp: %u ",IDAT_i,ihdr_chunk.height,ihdr_chunk.width,bytes_pp);
-}
-
-//this prepares the pixel struct accessed by the end user
-void Make_2D_pixel_struct_PLTE(){
-    pixel_rows = (struct pixel**)malloc(ihdr_chunk.height*sizeof(struct pixel*));
-    for(int i = 0 ; i < ihdr_chunk.height; i++ ){
-        pixel_rows[i] = (struct pixel*)malloc(ihdr_chunk.width*sizeof(struct pixel));   
-    }
-    int IDAT_i = 0;
-    uint8_t plte_i = 0;
-    for(int i = 0; i< ihdr_chunk.height; i++){
-
-        for(int j=0; j< ihdr_chunk.width;j++){
-            if(j == 0){
-                IDAT_i++;
-            }
-        plte_i = IDAT_Buffer2[IDAT_i];
-        pixel_rows[i][j] = plte_pixels[plte_i];
-        IDAT_i++;
-        }
-    }
-}
-
-void Print_PLTE_2d(){
-    int plte_i = 0;
-     for(unsigned int i = 0; i< ihdr_chunk.height; i++){
-        for(unsigned int j=0; j< ihdr_chunk.width;j++ ){
-           // ////printf("\n y:%u x:%u %u %u %u ",i,j,pixel_rows[i][j].r,pixel_rows[i][j].g,pixel_rows[i][j].b);
-            plte_i++;
-        }
-    }
-}
-
-void Print_PLTE(){
-    for(int i = 0; i < plte_chunk.length;i++){
-        if(i % 3 == 0){
-            ////printf("\n");
-        }
-       // ////printf(" %u",plte_chunk.Chunk_Data[i]);
+    for(int i =0 ; i < ihdr_chunk.height * (ihdr_chunk.width+1); i++){
+        IDAT_Buffer[i] = IDAT_Buffer2[i];
     }
 }
 
 int decode_IHDR(FILE* fp){
     if(is_IHDR(fp) ){
         unsigned char* b = malloc(4 * sizeof(unsigned char)); // assign 4 bytes
-        fread(b,1,4,fp);
+        bytes_read = fread(b,1,4,fp);
         ihdr_chunk.width = *(unsigned int*)(b);
         Little_Endian & 1 ?PNG_change_endian(&ihdr_chunk.width):0;
-        printf("\npng widht: %u ", ihdr_chunk.width);
-
-        fread(b,1,4,fp);
+        //printf("\npng widht: %u ", ihdr_chunk.width);
+        bytes_read = fread(b,1,4,fp);
         ihdr_chunk.height = *(unsigned int*)(b);
         Little_Endian & 1 ?PNG_change_endian(&ihdr_chunk.height):0;
-        printf("\npng height: %u ", ihdr_chunk.height);       // //////printf(" %d",foo);
-
-        fread(b,1,1,fp);
+        //printf("\npng height: %u ", ihdr_chunk.height);       // ////////printf(" %d",foo);
+        bytes_read = fread(b,1,1,fp);
         ihdr_chunk.bit_depth =  b[0];
-        printf("\npng bit_depth: %u ", ihdr_chunk.bit_depth);
-
-        fread(b,1,1,fp);
+        //printf("\npng bit_depth: %u ", ihdr_chunk.bit_depth);
+        bytes_read = fread(b,1,1,fp);
         ihdr_chunk.colour_type = b[0];
-        printf("\npng clr type: %u ", ihdr_chunk.colour_type);
-
-        fread(b,1,1,fp);
+        //printf("\npng clr type: %u ", ihdr_chunk.colour_type);
+        bytes_read = fread(b,1,1,fp);
         ihdr_chunk.compression_method = b[0];
-        printf("\npng compression type: %u ", ihdr_chunk.compression_method);        
-        
-        fread(b,1,1,fp);
+        //printf("\npng compression type: %u ", ihdr_chunk.compression_method);        
+        bytes_read = fread(b,1,1,fp);
         ihdr_chunk.Filter_method = b[0];
-        printf("\npng filter type: %u ", ihdr_chunk.Filter_method);
-
-        fread(b,1,1,fp);
-        //ihdr_chunk.Interface_Method = b[0];
-        printf("\npng Interface Method: %u ", ihdr_chunk.Interface_Method);        
+        //printf("\npng filter type: %u ", ihdr_chunk.Filter_method)
+        bytes_read = fread(b,1,1,fp);
+        ihdr_chunk.Interface_Method = b[0];
+        //printf("\npng Interface Method: %u ", ihdr_chunk.Interface_Method);        
         free(b);        
         bytes_pp = set_Bytes_per_pixel(ihdr_chunk.colour_type,ihdr_chunk.bit_depth);
-        printf("bytes_pp: %d",bytes_pp);
+        //printf("bytes_pp: %d",bytes_pp);
         return 1;
     }
     else{
@@ -694,24 +527,20 @@ int decode_IHDR(FILE* fp){
     }
 }
 
-struct TRNS_CHUNK trns_chunk;
-
 void Get_Trns_Chunk(FILE* fp){
 unsigned char* temp=malloc(4);
 ssize_t fp_pos = ftell(fp);
 int limit = 30000;
 while(!feof(fp) && ftell(fp) < limit){
-    fread(temp,1,1,fp);
+    bytes_read = fread(temp,1,1,fp);
     if(temp[0] == Trns_id[0]){
-        ////printf("maybe found trns at %d",ftell(fp));
         fseek(fp,-1,1); //go back one to read the whole thing
-        fread(temp,1,4,fp);
+        bytes_read = fread(temp,1,4,fp);
         if(compare_bytes_with_id(NULL,temp,Trns_id)){ // check if the 4 bytes match the identifier
             fseek(fp,-8,SEEK_CUR); // go back to the lengths
-            fread(temp,1,4,fp); // read the length
+            bytes_read = fread(temp,1,4,fp); // read the length
             trns_chunk.length = *(unsigned int*)(temp);
             if(Little_Endian == 1)PNG_change_endian(&trns_chunk.length); // get the chunk length
-            ////printf("trns chunk len: %u ",trns_chunk.length);
             fseek(fp,4,SEEK_CUR);      
             break;
             }
@@ -719,17 +548,16 @@ while(!feof(fp) && ftell(fp) < limit){
 }
 trns_chunk.Chunk_Data = (uint8_t*)malloc(trns_chunk.length * sizeof(uint8_t));
     for(int i = 0; i < trns_chunk.length; i++ ){
-        fread(temp,1,1,fp);
+        bytes_read = fread(temp,1,1,fp);
         trns_chunk.Chunk_Data[i] = temp[0];
     }
     fseek(fp,fp_pos,SEEK_SET);
     free(temp);
 }
 
-
 int is_png(FILE* fp){
     unsigned char* b = malloc(8);
-    fread(b,1,8,fp);
+    bytes_read = fread(b,1,8,fp);
     for(int i=0;i<8;i++){
         if( b[i] != png_identifier[i] ){
         fclose(fp);
@@ -741,15 +569,12 @@ int is_png(FILE* fp){
     return 1;
 }
 
-void Print_Buffers(){            
-}
 void PNG_Get_PNGINFO(PNG_INFO* pnginf_ref){
     (*pnginf_ref) = ihdr_chunk;
 }
 //Pass your 2d pixel struct unitialized as a variable and just pass your buffer here
 // expects RGB or RGBA as input
 void PNG_Get_Pixelpp(pixel_pp* ppp,uint8_t* in,uint8_t clr){
-    printf("\n Converting IDAT to 2d PIX\n");
     (*ppp) = (struct pixel**)malloc(ihdr_chunk.height*sizeof(struct pixel*));
     for(int i = 0 ; i < ihdr_chunk.height; i++ ){
         (*ppp)[i] = (struct pixel*)malloc(ihdr_chunk.width*sizeof(struct pixel));   
@@ -758,10 +583,8 @@ void PNG_Get_Pixelpp(pixel_pp* ppp,uint8_t* in,uint8_t clr){
     int BufferSize = ScanLineLength * ihdr_chunk.height;
     int row = 0;
     int col = 0;
-
     for(int i = 0; i<BufferSize;i+=ScanLineLength ){
-        for(int j =bytes_pp +i; j < ScanLineLength+i+bytes_pp; j+=bytes_pp){
-                    
+        for(int j =bytes_pp +i; j < ScanLineLength+i+bytes_pp; j+=bytes_pp){ 
             (*ppp)[row][col].r = 0;
             (*ppp)[row][col].g = 0;
             (*ppp)[row][col].b = 0;
@@ -773,42 +596,38 @@ void PNG_Get_Pixelpp(pixel_pp* ppp,uint8_t* in,uint8_t clr){
                     (*ppp)[row][col].g = in[j-bytes_pp];
                     (*ppp)[row][col].b = in[j-bytes_pp];
                     (*ppp)[row][col].A = 255;
-
-                    ;break;
+                    break;
                     case Indexed_colour: 
                     (*ppp)[row][col].r = in[j-bytes_pp];
                     (*ppp)[row][col].g = in[j-bytes_pp+1];
                     (*ppp)[row][col].b = in[j-bytes_pp+2];
                     (*ppp)[row][col].A = in[j-bytes_pp+3];
-                    ;break;
+                    break;
                     case Greyscale_Alpha: 
                     (*ppp)[row][col].r = in[j-bytes_pp];
                     (*ppp)[row][col].g = in[j-bytes_pp];
                     (*ppp)[row][col].b = in[j-bytes_pp];
                     (*ppp)[row][col].A = in[j-bytes_pp+1];
-                    ;break;
+                    break;
                     case Truecolour_Alpha: 
                     (*ppp)[row][col].r = in[j-bytes_pp];
                     (*ppp)[row][col].g = in[j-bytes_pp+1];
                     (*ppp)[row][col].b = in[j-bytes_pp+2];
                     (*ppp)[row][col].A = in[j-bytes_pp+3];
-                    ;break;
+                    break;
                     case Truecolour:
                     (*ppp)[row][col].r = in[j-bytes_pp];
                     (*ppp)[row][col].g = in[j-bytes_pp+1];
                     (*ppp)[row][col].b = in[j-bytes_pp+2];
 		            (*ppp)[row][col].A = in[j-bytes_pp+3];
-                    ;break;
+                    break;
                     default: ;break;
                 }
-                  //  //////printf("\n pixel_rows[%d][%d] r:%d g:%d b:%d A:%d GR:%d ",row,col,pixel_rows[row][col].r,pixel_rows[row][col].g,pixel_rows[row][col].b,pixel_rows[row][col].A,pixel_rows[row][col].GR);
                 col++;
         }
         col = 0;
         row++;
     }
-    //free(IDAT_Buffer);
-    //free(IDAT_Buffer2);
 }
 
 int PNG_Init(char* FileName){
@@ -819,7 +638,6 @@ int PNG_Init(char* FileName){
         if(is_png(fp)){
             Little_Endian = isLittle_Endian();
             decode_IHDR(fp); 
-
             if(ihdr_chunk.colour_type == 3){ // 3 means that it is indexed
                 bytes_pp = 4;
                 get_PLTE(fp); // PLTE is always after ihdr and before IDAT 
@@ -827,7 +645,7 @@ int PNG_Init(char* FileName){
                 get_IDAT(fp);
                 decode_IDAT();
                 Convert_PLTE_To_Pixel(); // converts the plte entries to pixels
-                Make_IDATBUF_Plte(); //
+                Make_IDATBUF_Plte(); 
                 free(IDAT_Buffer2);
                 is_initialized = 1;
             }
@@ -836,7 +654,6 @@ int PNG_Init(char* FileName){
                 get_IDAT(fp);
                 decode_IDAT();
                 Undo_Filters();
-                printf(" OPT: %d ",Optionsflag);
                 free(IDAT_Buffer2);
                 is_initialized = 1;
         	}
@@ -860,11 +677,15 @@ void PNG_Free_2dpixel(int height , pixel_pp* pp  ){
     }
     free( (*pp) );
 }
-
 //Deallocate all buffers
 void PNG_Exit(){        
-  //  PNG_Free_2dpixel(ihdr_chunk.height,&pixel_rows);
     free(IDAT_Buffer);
+    if(ihdr_chunk.colour_type == Indexed_colour){
+        free(plte_pixels);
+        free(trns_chunk.Chunk_Data);
+        free(plte_chunk.Chunk_Data);
+
+    }
 }
 
 // IDAT buffer is not in RGBA so it hast to be converted
@@ -873,39 +694,50 @@ void PNG_Get_Pixelvals_RGBA(uint8_t** plist){
     long size = ihdr_chunk.height * ScanLen;
     struct pixel px;
     (*plist) = malloc(ihdr_chunk.width*ihdr_chunk.height*4);
-    if(ihdr_chunk.colour_type == Truecolour_Alpha){
-        perror("Pixelvals are already RGBA");
+    if(ihdr_chunk.colour_type == Indexed_colour){
+    uint32_t IDAT_i= 0;
+    uint32_t IDAT2_i= 0;
+    uint32_t plte_i = 0;
+    while(IDAT_i < (ihdr_chunk.width+1)*ihdr_chunk.height){
+            if(IDAT2_i % ScanLen == 0) IDAT_i++;
+            (*plist)[IDAT2_i] = plte_pixels[IDAT_Buffer[IDAT_i]].r;
+            IDAT2_i++;
+            (*plist)[IDAT2_i] = plte_pixels[IDAT_Buffer[IDAT_i]].g;
+            IDAT2_i++;
+            (*plist)[IDAT2_i] = plte_pixels[IDAT_Buffer[IDAT_i]].b;
+            IDAT2_i++;
+            (*plist)[IDAT2_i] = plte_pixels[IDAT_Buffer[IDAT_i]].A;
+            IDAT2_i++;
+            IDAT_i++; 
+    }
+    return;
     }
     int i = bytes_pp-1;
     if(ihdr_chunk.colour_type == Greyscale){
         i = bytes_pp;
     }
     int j = 0 ;
-    if(ihdr_chunk.colour_type == Truecolour_Alpha || ihdr_chunk.colour_type == Truecolour ) j = 3;
+    if(ihdr_chunk.colour_type == Truecolour_Alpha || ihdr_chunk.colour_type == Truecolour  ){
+        i = bytes_pp - 1;
+        j = 3;
+    }
     while(i < size){
         
         switch (ihdr_chunk.colour_type)
         {
             case Greyscale:
-            printf("Greyscale");
-            (*plist)[j] = IDAT_Buffer[i];
-            j++;
-            (*plist)[j] = IDAT_Buffer[i];
-            j++;
-            (*plist)[j] = IDAT_Buffer[i];
-            j++;
+            (*plist)[j-3] = IDAT_Buffer[i];
+            (*plist)[j-2] = IDAT_Buffer[i];
+            (*plist)[j-1] = IDAT_Buffer[i];
             (*plist)[j] = 255;
-            j++;
+            j+=4;
             ;break;
             case Greyscale_Alpha:
-            (*plist)[j] = IDAT_Buffer[i-1];
-            j++;
-            (*plist)[j] = IDAT_Buffer[i-1];
-            j++;
-            (*plist)[j] = IDAT_Buffer[i-1];
-            j++;
+            (*plist)[j-3] = IDAT_Buffer[i-1];
+            (*plist)[j-2] = IDAT_Buffer[i-1];
+            (*plist)[j-1] = IDAT_Buffer[i-1];
             (*plist)[j] = IDAT_Buffer[i];
-            j++;
+            j+=4;
             break;
             case Truecolour:
             (*plist)[j-3] = IDAT_Buffer[i-2];
@@ -921,25 +753,14 @@ void PNG_Get_Pixelvals_RGBA(uint8_t** plist){
             (*plist)[j] = IDAT_Buffer[i];
             j+=bytes_pp;
             ;break;
-            case Indexed_colour:
-            px = plte_pixels[IDAT_Buffer[i]];
-                //TODO: Implement converting IDAT_Buffer of Indexes To RGBA IDAT
-            (*plist)[j-3] = px.r;
-            (*plist)[j-2] = px.g;
-            (*plist)[j-1] = px.b;
-            (*plist)[j]   = px.A;
-            j+=bytes_pp;
-            ;break;
         }
-        
-        if(ihdr_chunk.colour_type != Indexed_colour)i+=bytes_pp;
-        else i++;
+        i+=bytes_pp;
     }
   
 }
 
 void PNG_Get_Pixelvals(uint8_t** plist){
-    long size = ihdr_chunk.width * ihdr_chunk.height * bytes_pp;
+    int size = ihdr_chunk.width * ihdr_chunk.height * bytes_pp;
     (*plist) = malloc(size);
     for(int i = 0; i < size;i++){
         (*plist)[i] = IDAT_Buffer[i];
@@ -999,7 +820,7 @@ void PNG_mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale,int cl
     pixel_pp pp;
     pixel_pp pp_sc;//scaled 2d pixel
    // PNG_make2d_Idat(&p_vals2d,buf,w,h);
-    PNG_Get_Pixelpp(&pp,buf,clr);
+    PNG_Get_Pixelpp(&pp,buf,clr); //this throws a warning but it works ?? TODO: test if it causes problems
     w/=scale;
     h/=scale;
 
@@ -1067,7 +888,6 @@ unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
        defstream.avail_in = (height*ScanLineLen);
     break;
    }
-   printf("\navail in %d \n",defstream.avail_in);
     deflateInit(&defstream, Z_DEFLATED);
 
     unsigned long bytes_written=0;
@@ -1078,7 +898,6 @@ unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
         defstream.next_out = out;
         e = deflate(&defstream, Z_FINISH);
         have = blocksize - defstream.avail_out;
-       // printf("have: %u",have);
         write_chnk_len_IDAT(have,fp);
         bytes_written += fwrite(out, sizeof(char), have, fp);
         png_crc_buf = malloc(have+4);
@@ -1096,8 +915,6 @@ unsigned long PNG_deflate(uint8_t *t, int ScanLineLen, int height, int bytepp,in
         free(png_crc_buf);
     } while (defstream.avail_out == 0);
     deflateEnd(&defstream);
-    printf("written %d",bytes_written);
-    perror("zlib:");
     return bytes_written;
 }
 
@@ -1123,12 +940,10 @@ int PNG_calc_filterval(int ScanLineLen,int bytepp){
         //UP is NOT possible
         //check if sub is possible
         //return UP;
-        //printf(" UP encoding");
         return UP;
     }
     if(filter == -2){
         //NOFILTER
-       // printf("NO Filter");
         return NOFILTER;
     }
 }
@@ -1141,7 +956,6 @@ int applyFilter(uint8_t* fil_Scan,int len){
     case UP:
         fil_Scan[0] = UP;
         for(int i = 1; i < len ; i++ ){
-           // printf(" %u prev: %d",fil_Scan[i],previous_ScanLine[i]);
             fil_Scan[i] = ScanLine[i] - previous_ScanLine[i];
         }
     break;
@@ -1176,7 +990,7 @@ int copyScantoBuf(uint8_t* fil_buf,uint8_t* fil_Scan,int len,int buf_i){
     return buf_i;
 }
 //expects RGB or RGBA
- void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_hasAlpha,int bitdepth){
+void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_hasAlpha,int bitdepth){
     int size = 0;
     int bytepp = 0;
     int grbytepp = 0;
@@ -1209,7 +1023,6 @@ int copyScantoBuf(uint8_t* fil_buf,uint8_t* fil_Scan,int len,int buf_i){
     float B = 0;
     */
    // Y = 0.299 R + 0.587 G + 0.114 B
-    //printf("size: %d",size);
 
     if(bitdepth == 8){
         for(int i = bytepp; i < size; i+=bytepp){
@@ -1263,11 +1076,9 @@ int copyScantoBuf(uint8_t* fil_buf,uint8_t* fil_Scan,int len,int buf_i){
             case 1:
                 tmp = (pix.r+pix.b+pix.g)/3;
                 tmp > 128 ? (val = (1 << bit_pos)  | val) : 0;
-              //  printf(" %d", i);
                 bit_pos++;             
                 if(bit_pos == 8 || bit_pos == w*h) {
                     bit_pos = 0;
-                    //(*out)[out_i] = (val * 0x0202020202ULL & 0x010884422010ULL) % 1023; //reverses the bits with 64bit multiplication
                     (*out)[out_i] =((val * 0x0802LU & 0x22110LU) | (val * 0x8020LU & 0x88440LU)) * 0x10101LU >> 16;
                     val =0;
                     out_i++;
@@ -1285,9 +1096,6 @@ int copyScantoBuf(uint8_t* fil_buf,uint8_t* fil_Scan,int len,int buf_i){
             }
         }
     }
-    printf(" %d ",out_i);
-
-    //printf("\n out_i: %d",out_i);
 }
 
 //this creates the filtered buffer to write to the file
@@ -1348,19 +1156,86 @@ int indexed_ccheck(uint8_t* in, int len){
         }
         check & 1 ? unique_count++:0;
     }
-    printf("unique vals counted: %d",unique_count);
     return unique_count < 256 ? 1 : 0; // will return 1 if unique_count is true
 }
 
-void make_indexed_buffer(uint8_t* in, uint8_t* temp, int bufsize){
-
+void init_map(int n){
+    pmap = malloc(n * sizeof(struct plte_map_element));
+    plte_map_size = n;
+    for(int i = 0; i < n; i++){
+        pmap[i].value = -1;
+    }
 }
+
+int get_map_val(struct pixel p){
+    for(int i = 0; i < plte_map_size; i++ ){
+        if(p.r != pmap[i].px.r) continue;;
+        if(p.b != pmap[i].px.b) continue;
+        if(p.g != pmap[i].px.g) continue;
+        if(p.A != pmap[i].px.A) continue;
+        return pmap[i].value;
+    }
+    return -2; // Value does not exist
+}
+
+void set_map_val(struct pixel p,int value){
+    if(value < 0){
+        return;
+    }
+    pmap[value].px.r = p.r;
+    pmap[value].px.g = p.g;
+    pmap[value].px.b = p.b;
+    pmap[value].px.A = p.A;
+    pmap[value].value = value;
+}
+
+// Pass a plte chunk struct aand trns as reference if isRGB = 0 clr is RGB no Alpha else RGBa so write trns 
+int make_pixel_map(uint8_t* in,uint8_t** indexes,int bufsize,int isRGB){
+    int plte_i = 0;
+    int index_i =0;
+    int bytepp = 0;
+    if(isRGB) bytepp = 3;
+    else bytepp = 4;
+    init_map(bufsize);
+    struct pixel px;
+    int val = 0;
+    int in_i = bytepp-1;
+    for(int i = bytepp-1; i < bufsize;i+=bytepp ){
+        if(index_i % ScanLineLength == 0){
+            (*indexes)[index_i] = 0;
+            index_i++;
+            continue;
+        }
+        px.r = in[in_i-3];
+        px.g = in[in_i-2];
+        px.b = in[in_i-1];
+        px.A = in[in_i];
+        val = get_map_val(px);
+
+        if(val == -2){
+            //value not mapped 
+            set_map_val(px,plte_i);
+            (*indexes)[index_i] = get_map_val(px); 
+            index_i++;
+            in_i+=bytepp;
+            plte_i++;
+        }
+        else if(val > -1){
+           //value is mapped
+           (*indexes)[index_i] = val;
+            index_i++;
+            in_i+=bytepp;
+            continue; 
+        }
+    }
+    return plte_i;
+}
+
 //Expects RGBA for now
 void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int clr_out,int clr_in,unsigned char bitdepth)
 {
     Little_Endian = isLittle_Endian();
     int indexed_possible = 0;
-   // Exec_time_Start();
     struct IHDR_CHUNK ihdr;
     ihdr.height = height;
     ihdr.width = width; 
@@ -1368,10 +1243,13 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     ihdr.bit_depth = bitdepth;
     enc_bytespp = set_Bytes_per_pixel(clr_in,ihdr.bit_depth);
     uint8_t* in_buf = NULL; 
-    
+    uint8_t* buf = NULL;  
+    uint8_t* pltebuf = NULL;
+    uint8_t* pltebuf2 = NULL;
+    uint32_t plte_size = 0;
+    unsigned long png_crc = 0;
     //this will contain the transformed pixel values in a 1D list 
     //enc_bytespp will define how to get a pixels values
-    // printf("clr in: %d  clr out: %d bytespp: %d ",clr_in,clr_out,enc_bytespp);
     //TODO: relocate the if statements into another function for more readability
     if(clr_in == clr_out){
         enc_bytespp = set_Bytes_per_pixel(clr_out,8);
@@ -1406,13 +1284,10 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
         indexed_possible = indexed_ccheck(IDAT_input,ihdr.width * ihdr.height);
         enc_bytespp = 1;    
     }
-   printf("enc bpp %d",enc_bytespp);
     unsigned long ScanLineLen = (ihdr.width * enc_bytespp) + 1;
     int Bufsize = ScanLineLen*ihdr.height;
-    printf(" %d ",Bufsize);
     uint8_t* temp = malloc(Bufsize);
     
-    printf("indexed is possible %d",indexed_possible);
     if(indexed_possible == 0 && bitdepth >=8)makefilteredbuffer(in_buf,temp,Bufsize,ScanLineLen);
     else if(bitdepth < 8){
         int temp_i = 0;
@@ -1428,16 +1303,41 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
         free(in_buf);
     }
     else{
-        make_indexed_buffer(in_buf,temp,Bufsize); //TODO: IMPLEMENT THIS
+        ScanLineLength = ScanLineLen;
+        Bufsize = ihdr.height *(  (ihdr.width * 4) +1 );
+        uint32_t elements = make_pixel_map(IDAT_input,&temp,Bufsize+ihdr.width*3,0); //TODO: IMPLEMENT THIS
+        plte_size = 8+elements*3;
+        pltebuf = malloc(plte_size);
+        pltebuf2 = malloc(plte_size-4);
+
+        pltebuf[0] = ( (plte_size-8) & 0xff000000UL) >> 24;
+        pltebuf[1] = ( (plte_size-8)  & 0x00ff0000UL) >> 16;
+        pltebuf[2] = ( (plte_size-8)  & 0x0000ff00UL) >> 8;
+        pltebuf[3] = ( (plte_size-8)  & 0x000000ffUL) ;
+        pltebuf[4] = PLTE_identifier[0];
+        pltebuf[5] = PLTE_identifier[1];
+        pltebuf[6] = PLTE_identifier[2];
+        pltebuf[7] = PLTE_identifier[3];
+        pltebuf2[0] = PLTE_identifier[0];
+        pltebuf2[1] = PLTE_identifier[1];
+        pltebuf2[2] = PLTE_identifier[2];
+        pltebuf2[3] = PLTE_identifier[3];
+
+        uint32_t plte_i = 0;
+        uint32_t plte_i2 = 6;
+
+        for(int i = 10; i < ( (elements) * 3 )+8;i+=3 ){
+            pltebuf[i-2] = pmap[plte_i].px.r;
+            pltebuf[i-1] = pmap[plte_i].px.g;
+            pltebuf[i] = pmap[plte_i].px.b;
+            pltebuf2[plte_i2-2] =  pmap[plte_i].px.r;
+            pltebuf2[plte_i2-1] =  pmap[plte_i].px.g;
+            pltebuf2[plte_i2] =  pmap[plte_i].px.b;
+            plte_i2+=3;
+            plte_i++;
+        }
+
     }
-    int jbM=0;
-     while (jbM < 10)
-    {
-        //printf(" %u ",temp[jbM]);
-        //printf(" %u ",Bufsize);
-        jbM++;
-    }
-    //free(in_buf);
     FILE *fp = fopen(PngName, "wb");
     fwrite(png_identifier, 1, 8, fp);
     fwrite(standard_ihdr_length, 1, 4, fp);
@@ -1454,7 +1354,7 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     fwrite(IHDR_identifier, 1, 4, fp);
     fwrite(&w, 1, 4, fp);
     fwrite(&h, 1, 4, fp);
-    uint8_t* buf = malloc(17);    
+    buf = malloc(17);
     buf[0] = IHDR_identifier[0];
     buf[1] = IHDR_identifier[1];
     buf[2] = IHDR_identifier[2];
@@ -1481,12 +1381,22 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     b = 0;
     fputc(b, fp);
     fputc(b, fp);
-    fputc(b, fp);
-    unsigned long png_crc = 0;
+    fputc(b, fp); 
     png_crc = crc(buf,17);
     png_crc = __builtin_bswap32( png_crc);
     fwrite(&png_crc,1,4,fp);
-    free(buf);
+    free(buf); // writing ihdr is done 
+
+    //TODO: Add trns 
+    if(clr_out == Indexed_colour && indexed_possible == 1){
+        fwrite(pltebuf,1,plte_size,fp);
+        png_crc = crc(pltebuf2,plte_size-4);
+        png_crc = __builtin_bswap32( png_crc);
+        free(pltebuf);
+        fwrite(&png_crc,1,4,fp);
+        free(pltebuf2);
+    }
+ 
     unsigned long e=0;
     unsigned long fp_p = ftell(fp)-8;
     e = PNG_deflate(temp, ScanLineLen, ihdr.height, enc_bytespp,16384,bitdepth ,fp);
@@ -1496,6 +1406,7 @@ void Png_Encode(uint8_t *IDAT_input,  char *PngName, int width, int height, int 
     uint8_t EOI[] = {0xae, 0x42, 0x60, 0x82};
     fwrite(EOI, 1, 4, fp);
     fclose(fp);
+    
    // Exec_time_stop();   
 }
 //........ PNGENCODING .........//]

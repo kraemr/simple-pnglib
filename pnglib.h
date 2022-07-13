@@ -65,7 +65,6 @@ struct IHDR_CHUNK{
 //######## Functions #########//{
 int  PNG_Init(char* FileName);
 void PNG_Exit();//Deallocates ALL internal buffers use this if you want to read another file
-void PNG_Get_Dim(int* w, int* h);
 //void PNG_Get_Pixelpp(pixel_pp* pp); // gets 2d pixel struct array for really easy access to all values
 void PNG_Get_Pixelvals(uint8_t** plist); // saves the IDAT buffer (the raw rgba vals) into a 1d uint8_t* (unsigned char*) buffer
 void PNG_Get_Pixelvals_RGBA(uint8_t** plist);
