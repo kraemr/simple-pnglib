@@ -69,7 +69,6 @@ const uint8_t Trns_id[]={
 };
 const uint8_t zeroes[] ={0,0,0,0};
 //******** Variable Definitions ********//}
-
 void Print_Pixel(struct pixel px){
     printf("Pixel Values r: %u, b: %u, g: %u, A: %u ",px.r,px.g,px.b,px.A);
 }
@@ -81,6 +80,7 @@ void get_last_block(uint8_t* lastblock,uint8_t* Scanline,int pos){
         index++;
     }
 }
+
 void get_current_block(uint8_t* currblock,uint8_t* Scanline,int pos){
     int index = 0;
     for(int i = pos; i<pos+bytes_pp;i++){
@@ -88,6 +88,7 @@ void get_current_block(uint8_t* currblock,uint8_t* Scanline,int pos){
         index++;
     }
 }
+
 void Add_blocks(uint8_t* lastblock,uint8_t* currblock,uint8_t* Scanline,int pos){
     for(int i = 0 ; i< bytes_pp; i++){
         currblock[i]+=lastblock[i];
@@ -121,6 +122,7 @@ void zero_block(uint8_t* block){
         block[i]=0;
     }
 }
+
 //gets the last Scanline
 void Undo_Up(int ScanLineLength){
   for(int i = 0;i<ScanLineLength-1;i++){
@@ -180,15 +182,13 @@ uint8_t PaethPredictor(uint8_t a,  uint8_t b, uint8_t c){
     return PR;
 }
 void Undo_Paeth(){
-    uint8_t* last = malloc(bytes_pp);
-    uint8_t* current = malloc(bytes_pp);
-    uint8_t* last_scan_curr = malloc(bytes_pp);
-    uint8_t* last_scan_last = malloc(bytes_pp);
-
+   uint8_t* last = malloc(bytes_pp);
+   uint8_t* current = malloc(bytes_pp);
+   uint8_t* last_scan_curr = malloc(bytes_pp);
+   uint8_t* last_scan_last = malloc(bytes_pp);
    uint8_t a=0;
    uint8_t b=0;
    uint8_t c=0;
-
    for(int i=0; i< ScanLineLength-bytes_pp;i+=bytes_pp){
          if(i==0){
                 get_last_block(last,ScanLine,i);
@@ -279,29 +279,33 @@ void Undo_Filters(){
                 Copy_ScanLine(ScanLine,ScanLineLength,IDAT_i);;break;
                 break;
                 }
-            } // for loop
-            free(ScanLine);
-            free(previous_ScanLine);
-        }
+           } // for loop
+	free(ScanLine);
+	free(previous_ScanLine);
+}
 //######## pngreading Functions #########//{
 long long int PNG_get_size(char *pathname){
     struct stat file_stat;
     stat(pathname,&file_stat);
     return file_stat.st_size;
 }
+
 int PNG_file_exists(char* file_name){
   if( access( file_name, F_OK ) != -1)return 1;
   else return 0;  
     ////perror("file is not found");
 }
+
 int isLittle_Endian(){
     int num = 1;
     if (*(char *)&num == 1)return 1;
     else return 0;
 }
+
 void PNG_change_endian(unsigned int* n){
 *n = (*n >> 24) | ((*n >> 8) & 0x0000ff00) | ((*n << 8) & 0x00ff0000) | (*n << 24);
 }
+
 unsigned int compare_bytes_with_id(FILE* fp,unsigned char* buf,const uint8_t id[4]){
     if(fp == NULL){
         for(int i = 0 ; i< 4;i++){
@@ -330,7 +334,6 @@ unsigned int read_chunk_length(FILE* fp){
     fseek(fp,-8,SEEK_CUR); // seek to the start of the lengths
     bytes_read = fread(temp,1,4,fp);
     unsigned int length=*(unsigned int*)(temp);
-
     if(Little_Endian){
         fseek(fp,4,SEEK_CUR);
         free(temp);
@@ -354,7 +357,6 @@ void get_IDAT(FILE* fp){
     unsigned int chnk_length=0; // chunk length
     unsigned int i=0;
     unsigned int IDAT_COUNT=0;
-
     while(!feof(fp)){
         bytes_read = fread(temp,1,1,fp);
         if(temp[0] == IDAT_ID[0]){
@@ -375,7 +377,6 @@ void get_IDAT(FILE* fp){
                 break;
             }
         }
-    //Puts all the IDAT DATA in an 
     }
     free(temp);
 }
@@ -396,7 +397,6 @@ void decode_IDAT(){
     }
     infstream.next_out = (Bytef *)IDAT_Buffer2; // output char array
     int e = 0;
-
     inflateInit(&infstream);
     e = inflate(&infstream, Z_NO_FLUSH);
     inflateEnd(&infstream);
@@ -434,11 +434,9 @@ void get_PLTE(FILE* fp){
 
 int is_IHDR(FILE* fp){
     unsigned char* b = malloc(4);
-   
     fseek(fp,4,SEEK_CUR);
         bytes_read = fread(b,1,4,fp);
         for(int i=0;i<4;i++){
-            
             if(b[i] != IHDR_identifier[i]){
                 free(b);
                 return 0;
