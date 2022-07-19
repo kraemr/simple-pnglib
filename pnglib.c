@@ -573,16 +573,18 @@ void PNG_Get_PNGINFO(PNG_INFO* pnginf_ref){
 //Pass your 2d pixel struct unitialized as a variable and just pass your buffer here
 // expects RGB or RGBA as input
 void PNG_Get_Pixelpp(pixel_pp* ppp,uint8_t* in,uint8_t clr){
+    int bpp = 0;
+    bpp = set_Bytes_per_pixel(clr,8);
     (*ppp) = (struct pixel**)malloc(ihdr_chunk.height*sizeof(struct pixel*));
     for(int i = 0 ; i < ihdr_chunk.height; i++ ){
         (*ppp)[i] = (struct pixel*)malloc(ihdr_chunk.width*sizeof(struct pixel));   
     }
-    int ScanLineLength = (ihdr_chunk.width * bytes_pp);
+    int ScanLineLength = (ihdr_chunk.width * bpp);
     int BufferSize = ScanLineLength * ihdr_chunk.height;
     int row = 0;
     int col = 0;
     for(int i = 0; i<BufferSize;i+=ScanLineLength ){
-        for(int j =bytes_pp +i; j < ScanLineLength+i+bytes_pp; j+=bytes_pp){ 
+        for(int j =bpp +i; j < ScanLineLength+i+bytes_pp; j+=bpp){ 
             (*ppp)[row][col].r = 0;
             (*ppp)[row][col].g = 0;
             (*ppp)[row][col].b = 0;
@@ -590,34 +592,34 @@ void PNG_Get_Pixelpp(pixel_pp* ppp,uint8_t* in,uint8_t clr){
                 switch (clr)
                 {
                     case Greyscale: 
-                    (*ppp)[row][col].r = in[j-bytes_pp];
-                    (*ppp)[row][col].g = in[j-bytes_pp];
-                    (*ppp)[row][col].b = in[j-bytes_pp];
+                    (*ppp)[row][col].r = in[j-bpp];
+                    (*ppp)[row][col].g = in[j-bpp];
+                    (*ppp)[row][col].b = in[j-bpp];
                     (*ppp)[row][col].A = 255;
                     break;
                     case Indexed_colour: 
-                    (*ppp)[row][col].r = in[j-bytes_pp];
-                    (*ppp)[row][col].g = in[j-bytes_pp+1];
-                    (*ppp)[row][col].b = in[j-bytes_pp+2];
-                    (*ppp)[row][col].A = in[j-bytes_pp+3];
+                    (*ppp)[row][col].r = in[j-bpp];
+                    (*ppp)[row][col].g = in[j-bpp+1];
+                    (*ppp)[row][col].b = in[j-bpp+2];
+                    (*ppp)[row][col].A = in[j-bpp+3];
                     break;
                     case Greyscale_Alpha: 
-                    (*ppp)[row][col].r = in[j-bytes_pp];
-                    (*ppp)[row][col].g = in[j-bytes_pp];
-                    (*ppp)[row][col].b = in[j-bytes_pp];
-                    (*ppp)[row][col].A = in[j-bytes_pp+1];
+                    (*ppp)[row][col].r = in[j-bpp];
+                    (*ppp)[row][col].g = in[j-bpp];
+                    (*ppp)[row][col].b = in[j-bpp];
+                    (*ppp)[row][col].A = in[j-bpp+1];
                     break;
                     case Truecolour_Alpha: 
-                    (*ppp)[row][col].r = in[j-bytes_pp];
-                    (*ppp)[row][col].g = in[j-bytes_pp+1];
-                    (*ppp)[row][col].b = in[j-bytes_pp+2];
-                    (*ppp)[row][col].A = in[j-bytes_pp+3];
+                    (*ppp)[row][col].r = in[j-bpp];
+                    (*ppp)[row][col].g = in[j-bpp+1];
+                    (*ppp)[row][col].b = in[j-bpp+2];
+                    (*ppp)[row][col].A = in[j-bpp+3];
                     break;
                     case Truecolour:
-                    (*ppp)[row][col].r = in[j-bytes_pp];
-                    (*ppp)[row][col].g = in[j-bytes_pp+1];
-                    (*ppp)[row][col].b = in[j-bytes_pp+2];
-		            (*ppp)[row][col].A = in[j-bytes_pp+3];
+                    (*ppp)[row][col].r = in[j-bpp];
+                    (*ppp)[row][col].g = in[j-bpp+1];
+                    (*ppp)[row][col].b = in[j-bpp+2];
+		            (*ppp)[row][col].A = in[j-bpp+3];
                     break;
                     default: ;break;
                 }
@@ -814,7 +816,7 @@ void write_chnk_len_IDAT(unsigned int chnk_len, FILE* fp){
     fwrite(IDAT_ID, 1, 4, fp);
 }
 
-void PNG_mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale,int clr){
+void PNG_mipmap(uint8_t* buf,uint8_t** scaled_out,int h, int w,int scale,int clr){
     pixel_pp pp;
     pixel_pp pp_sc;//scaled 2d pixel
    // PNG_make2d_Idat(&p_vals2d,buf,w,h);
