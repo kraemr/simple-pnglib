@@ -71,7 +71,7 @@ void PNG_Get_Pixelvals_RGBA(uint8_t** plist);
 //void make2d_Idat(uint8_t*** out,uint8_t** in,int w, int h);
 void PNG_Free_2dpixel(int height , pixel_pp* pp);
 //void mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale);
-void PNG_mipmap(uint8_t** buf,uint8_t** scaled_out,int h, int w,int scale,int clr);
+void PNG_mipmap(uint8_t* buf,uint8_t** scaled_out,int h, int w,int scale,int clr);
 void PNG_Get_PNGINFO(PNG_INFO* pnginf_ref);
 void PNG_Get_Pixelpp(pixel_pp* ppp,uint8_t* in,uint8_t clr);
 void Png_Encode(uint8_t *IDAT_input, char *PngName, int width, int height,int clr_out,int clr_in,unsigned char bitdepth);
