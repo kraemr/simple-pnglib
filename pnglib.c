@@ -989,6 +989,21 @@ int copyScantoBuf(uint8_t* fil_buf,uint8_t* fil_Scan,int len,int buf_i){
     }
     return buf_i;
 }
+
+
+uint8_t fixgreyscale(struct pixel pix){
+    float R = (float)pix.r ;
+    R *= 0.299f;
+    float G = (float)pix.g;
+    G *= 0.587f;
+    float B = (float)pix.b;
+    B *= 0.114f;
+    R = roundf(R);
+    G = roundf(G);
+    B = roundf(B);
+    uint8_t Y = R+G+B;
+    return Y;
+}
 //expects RGB or RGBA
 void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_hasAlpha,int bitdepth){
     int size = 0;
@@ -1016,12 +1031,8 @@ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_has
     pix.g = 0;
     pix.A = 255;
     int out_i=0;
-    /*
-    float Y = 0;
-    float R = 0;
-    float G = 0;
-    float B = 0;
-    */
+
+    
    // Y = 0.299 R + 0.587 G + 0.114 B
 
     if(bitdepth == 8){
@@ -1031,15 +1042,9 @@ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_has
                 pix.g = in[i-2];
                 pix.b = in[i-1];
                 pix.A = in[i];
-/*
-            R = (float)pix.r ;
-            R *= 0.299f;
-            G = (float)pix.g;
-            G  *= 0.587f;
-            B = (float)pix.b;
-            B *= 0.114f;
-*/
-                (*out)[out_i] = (pix.r + pix.b + pix.g) /3;
+                uint8_t Y = fixgreyscale(pix);
+               // (*out)[out_i] = (pix.r + pix.b + pix.g) /3;
+                (*out)[out_i] = Y;
                     if(gr_hasAlpha){
                         out_i++;
                         (*out)[out_i] = pix.A;
@@ -1049,7 +1054,9 @@ void RGB_to_GreyScale(uint8_t* in,uint8_t** out,int w,int h,int isRGB,int gr_has
             pix.r = in[i-2];
             pix.g = in[i-1];
             pix.b = in[i];
-            (*out)[out_i] = (pix.r + pix.b + pix.g) / 3;
+            //(*out)[out_i] = (pix.r + pix.b + pix.g) / 3;
+            uint8_t Y = fixgreyscale(pix);
+            (*out)[out_i] = Y;
             if(gr_hasAlpha) {
                 out_i++;
                 (*out)[out_i] = pix.A;
