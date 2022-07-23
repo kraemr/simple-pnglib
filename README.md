@@ -16,15 +16,15 @@ Just to temper your expectations, this will not have any more advanced features 
 
 ## How to use:
 
-`gcc yourfile.c pnglib.dll zlib.dll`
+`gcc yourfile.c pnglib.dll zlib.dll -lm`
 
 or 
 
-`gcc yourfile.c pnglib.c -lz`
+`gcc yourfile.c pnglib.c -lz -lm`
 
 or 
 
-`gcc yourfile.c pnglib.so zlib.so`
+`gcc yourfile.c pnglib.so zlib.so -lm`
 
 there are some example on how to use it in a program in example.c
 
