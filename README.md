@@ -15,5 +15,6 @@ int main(){
         SPNG_write_metadata(fp,&spnginf); // write IHDR(Metadata width height ...)  // THIS IS NEEDED TO MAKE THE IMAGE INTO A VALID PNG!!!!
         SPNG_write(fp,&spnginf,px); // Finally write the IDAT portion of the image, ie the pixels
         fclose(fp);
+        free(px);//And of course free this after
 }
 ```
