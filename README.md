@@ -20,14 +20,5 @@ int main(){
 }
 ```
 ## Compilation
-``` bash
-gcc -c spnglib_write.c -o spnglib_write.o
-gcc -c spnglib_write_txt.c -o spnglib_write_txt.o
-gcc -c spnglib_read.c -o spnglib_read.o
-gcc -c spnglib_read_txt.c -o spnglib_read_txt.o
-# Then link these with your program
-# you could also build yourself a dll
-# you could also just include them directly:
-gcc yourprogram.c spnglib_read.c spnglib_write.c ... -lz
-```
+use make in the simple-pnglib folder to create the .dll, the youll also need to copy the header files in include to your own include location.
 The only dependency is zlib, this should be available on most systems.
