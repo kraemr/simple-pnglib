@@ -5,6 +5,7 @@ simple png library in pure c
 ## How to use:
 ```c
 #include "include/spnglib.h"
+#include <stdlib.h>
 int main(){
         unsigned char * px;
         struct SPNG_INFO spnginf; // contains width height colortype bytespp ...
