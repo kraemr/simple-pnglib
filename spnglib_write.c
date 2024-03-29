@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+extern unsigned char spng_cpu_get_is_little_endian();
+
 void spng_write_end(FILE* fp){
 	const unsigned char IDAT_END_ID[]={
     0x49,0x45,0x4e ,0x44};
@@ -54,6 +56,7 @@ unsigned long spng_deflate(unsigned char *t, int ScanLineLen, int height, int by
 }
 
 void SPNG_write_metadata(FILE * fp,struct SPNG_INFO* spnginf){
+	g_spng_is_little_endian = spng_cpu_get_is_little_endian();
 	const  unsigned char standard_ihdr_length[]={0x00,0x00,0x00,0x0d};
 	const unsigned int zeroes [4]={0,0,0,0};
 	unsigned int png_crc = 0;
@@ -125,6 +128,7 @@ int SPNG_write(FILE * fp,struct SPNG_INFO* spnginf,unsigned char* in_pix_buf){
 	#ifdef SPNGLIB_DEBUG_BENCHMARK
 		spng_bench_start();
 	#endif
+	g_spng_is_little_endian = spng_cpu_get_is_little_endian();
 	if(fp == NULL || spnginf == NULL || in_pix_buf == NULL){
 		return SPNG_NULL; 
 	}	
