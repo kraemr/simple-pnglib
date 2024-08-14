@@ -141,16 +141,15 @@ Comment 	Miscellaneous comment
 */
 void spng_alloc_metadata(char ** out, int * out_len, int in_len,char * in){
 //if(in_len > 0) free((*out));
-(*out) = (char*)malloc(in_len+1);
-(*out_len) = in_len;
-memcpy((*out),in,in_len);
-(*out)[in_len] = '\0';
+    (*out) = (char*)malloc(in_len+1);
+    (*out_len) = in_len;
+    memcpy((*out),in,in_len);
+    (*out)[in_len] = '\0';
 }
 
 void spng_parse_std_metadata(char * data,unsigned int data_len,char * keyword,struct SPNG_AUTHORINFO* spng_auth){
     // just put the data  into the corresponding buffers in spng_auth
     // also check if it is already allocced before allocing again
-
     if(strcmp(keyword, "Title") == 0){
         spng_alloc_metadata(&spng_auth->title,&spng_auth->title_len,data_len,data);
     }

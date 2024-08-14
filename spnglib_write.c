@@ -146,7 +146,6 @@ int SPNG_write(FILE * fp,struct SPNG_INFO* spnginf,unsigned char* in_pix_buf){
 	spng_deflate(filtered_idat_buffer,scanlinelength,spnginf->height,spnginf->width,16384,8,fp);
 	spng_write_end(fp);
 	free(filtered_idat_buffer);
-	fclose(fp);
 	#ifdef SPNGLIB_DEBUG_BENCHMARK
 		spng_bench_end("write file");
 	#endif
