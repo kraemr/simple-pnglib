@@ -23,23 +23,17 @@ unsigned int g_spng_crc; // global crc val
 unsigned int g_spng_bytes_rwritten;
 unsigned char g_spng_is_little_endian;
 unsigned char g_spng_bkgd[6];
-
 unsigned int g_spng_is_allocated; //keeps track if it has been Initialized by the same program
 unsigned int g_spng_plte_is_allocated; //keeps track if plte is initialized
 unsigned int g_trns_len;
 unsigned int g_spng_has_trns;
-
 struct SPNG_AUTHORINFO g_spng_author_info;
 struct SPNG_INFO g_spng_spnginf; //keeps track of the currently loaded images dimensions,bytespp,clrtype ...
 struct SPNG_PIXEL* g_spng_plte_pixels;
 unsigned int g_spng_plte_len;
 
-
-
-
-
 void spng_change_endian(unsigned int * n){
-*n = (*n >> 24) | ((*n >> 8) & 0x0000ff00) | ((*n<<8) & 0x00ff0000) | (*n << 24);
+    *n = (*n >> 24) | ((*n >> 8) & 0x0000ff00) | ((*n<<8) & 0x00ff0000) | (*n << 24);
 }
 
 #ifdef SPNGLIB_DEBUG_BENCHMARK

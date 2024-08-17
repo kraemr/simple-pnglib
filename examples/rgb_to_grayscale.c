@@ -5,15 +5,12 @@
 int main(int argc,char * argv[]){
     char out_filename[128]= {0}; // init with zeroes
     char in_filename[128] = {0};
-    
     if(argc >= 3){
         memcpy(out_filename,argv[2],128);
         memcpy(in_filename,argv[1],128);
-
         struct SPNG_INFO spnginf;
         int res = SPNG_read(in_filename,&spnginf);
         unsigned char * pixelbuf;
-
         // This will overwrite the values in spnginf with the ones for greyscale
         // For now any call to get_pixels functions allocates the pixelbuf for you
         // Which is why you do not need to allocate it
