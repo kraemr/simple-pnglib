@@ -19,7 +19,11 @@ int main(){
         free(px);//And of course free this after
 }
 ```
+
 ## Compilation
-use make in the simple-pnglib folder to create the .dll, the youll also need to copy the header files in include to your own include location.
-The only dependency is zlib, this should be available on most systems.
-You will need a zlib dll or a statically compiled zlib to link against.
+```bash
+#in simple-pnglib
+make #compiles c code into .so file
+cd examples
+./compile.sh
+```
