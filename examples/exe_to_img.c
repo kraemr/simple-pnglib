@@ -6,10 +6,14 @@
 int main(int argc, char * argv[]){
         if(argc < 2){
                 printf("Invalid Argument count\n");
+		printf("Usage: ./exe_to_img file\n");
                 return 1;
         }
+
+	//This program does have a buffer overflow
         const unsigned int BUF_SIZE = 16384;
-	unsigned char * px = malloc(3*1024 * 1024);
+	const unsigned int PX_BUF_SIZE = 3 * 1024 * 1024;
+	unsigned char * px = malloc(PX_BUF_SIZE);
         unsigned char file_buf[BUF_SIZE];
         FILE * executable_fp = fopen(argv[1],"rb");
         if(executable_fp == NULL){
@@ -24,7 +28,8 @@ int main(int argc, char * argv[]){
         int t = 0;
         
         while(!feof(executable_fp)){
-                printf("%llu %llu\n",remaining_bytes,px_i);
+                if(px_i >= PX_BUF_SIZE) break;
+		printf("%llu %llu\n",remaining_bytes,px_i);
                 remaining_bytes -= 16384;
                 fread(file_buf,BUF_SIZE,1,executable_fp);
                 if(remaining_bytes < 16384){
@@ -32,8 +37,9 @@ int main(int argc, char * argv[]){
                 }else{
                         t = 16384;
                 }
-                for(int i = 0; i < t; i+=1){
-                        px[px_i] = file_buf[i];
+               	for(int i = 0; i < t; i+=1){
+               		if(px_i >= PX_BUF_SIZE) break;
+		       	px[px_i] = file_buf[i];
                         px_i++;
                 }
         }
@@ -53,4 +59,5 @@ int main(int argc, char * argv[]){
         fclose(fp1);
         fclose(executable_fp);
         free(px);//And of course free this after
+	printf("wrote png data to res.png\n");
 }

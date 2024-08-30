@@ -12,8 +12,4 @@ int main(int argc,char* argv[]){
     printf("width: %d\n",spnginf.width);            
     printf("height: %d\n",spnginf.height);
     printf("size: %ld bytes\n",spnginf.size);
-
-
-
-
 }
