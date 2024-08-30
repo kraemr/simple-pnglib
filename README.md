@@ -1,8 +1,17 @@
 # simple-pnglib
 simple png library in pure c 
 
-
+## Compilation
+```bash
+#in simple-pnglib
+make #compiles c code into .so file
+cd examples
+./compile.sh
+```
 ## How to use:
+After Compilation what you need to do to use the library is copy spnglib.h and spnglib.so to somewhere in your project.
+Then when you compile your own project you have to link against spnglib.so.
+
 ```c
 #include "include/spnglib.h"
 #include <stdlib.h>
@@ -20,10 +29,4 @@ int main(){
 }
 ```
 
-## Compilation
-```bash
-#in simple-pnglib
-make #compiles c code into .so file
-cd examples
-./compile.sh
-```
+
